@@ -34,6 +34,10 @@ class Menu : public display::Overlay
   // false means it belongs to the scene underneath.
   bool tap(int x, int y, uint32_t now_ms);
 
+  // Opens the menu at its top page, or closes it if open. For the BOOT
+  // button.
+  void toggle(uint32_t now_ms);
+
   // Closes the menu once CYD_MENU_TIMEOUT_S passes without a tap.
   void tick(uint32_t now_ms);
 

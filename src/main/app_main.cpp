@@ -1,7 +1,7 @@
 // cydium: runs the selected simulation with the menu on top.
 //
-// The menu icon opens the Simulation, Settings and About pages; taps elsewhere
-// go to the simulation. Frame rate and heap are logged every 5 seconds.
+// The menu icon or the BOOT button opens the Simulation, Settings and About
+// pages; taps elsewhere go to the simulation. Frame rate and heap are logged every 5 seconds.
 
 #include <cinttypes>
 
@@ -34,7 +34,18 @@ constexpr BaseType_t kInputCore = portNUM_PROCESSORS > 1 ? 1 : 0;
 
 display::Renderer s_renderer;
 ui::Menu s_menu;
-QueueHandle_t s_taps = nullptr;
+// Input events, from the input task to the render loop.
+struct InputEvent
+{
+  enum class Kind : uint8_t
+  {
+    kTap,   // touch: a new press, raw sample in tap
+    kBoot,  // BOOT button pressed
+  };
+  Kind kind;
+  touch::RawSample tap;
+};
+QueueHandle_t s_input = nullptr;
 
 // Lets simulations draw through the renderer.
 class RendererSurface : public sim::Surface
@@ -117,27 +128,46 @@ void on_setting_changed(settings::Id id, uint8_t value, void*)
   }
 }
 
-// Samples touch and queues one raw sample per press (a new press needs a
-// clear release of at least 100 ms first).
+constexpr int kInputPollMs = 20;
+constexpr int kBootDebounce = 2;  // samples the BOOT button must hold steady
+
+// Samples touch and the BOOT button. Queues one tap per touch press (a new
+// press needs a clear release of at least 100 ms first) and one event per
+// debounced BOOT press.
 void input_task(void*)
 {
   bool down = false;
   int up_ms = 0;
+  bool boot_down = false;
+  int boot_steady = 0;
   for (;;)
   {
-    touch::RawSample s;
-    if (touch::irq_active() && touch::read_raw(&s))
+    InputEvent e{InputEvent::Kind::kTap, {}};
+    if (touch::irq_active() && touch::read_raw(&e.tap))
     {
       if (!down)
-        xQueueSend(s_taps, &s, 0);
+        xQueueSend(s_input, &e, 0);
       down = true;
       up_ms = 0;
     }
-    else if (down && (up_ms += 20) >= 100)
+    else if (down && (up_ms += kInputPollMs) >= 100)
     {
       down = false;
     }
-    vTaskDelay(pdMS_TO_TICKS(20));
+
+    const bool boot = board::boot_button_down();
+    boot_steady = boot == boot_down ? 0 : boot_steady + 1;
+    if (boot_steady >= kBootDebounce)
+    {
+      boot_down = boot;
+      boot_steady = 0;
+      if (boot_down)
+      {
+        e.kind = InputEvent::Kind::kBoot;
+        xQueueSend(s_input, &e, 0);
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(kInputPollMs));
   }
 }
 
@@ -169,7 +199,7 @@ extern "C" void app_main()
   board::set_backlight(255);
 
   ESP_ERROR_CHECK(touch::init());
-  s_taps = xQueueCreate(8, sizeof(touch::RawSample));
+  s_input = xQueueCreate(8, sizeof(InputEvent));
   xTaskCreatePinnedToCore(input_task, "input", 3072, nullptr, 5, nullptr, kInputCore);
 
   int frames = 0;
@@ -179,9 +209,16 @@ extern "C" void app_main()
   uint32_t last_ms = now_ms();
   for (;;)
   {
-    touch::RawSample s;
-    while (xQueueReceive(s_taps, &s, 0) == pdTRUE)
+    InputEvent e;
+    while (xQueueReceive(s_input, &e, 0) == pdTRUE)
     {
+      if (e.kind == InputEvent::Kind::kBoot)
+      {
+        ESP_LOGI(kTag, "BOOT button");
+        s_menu.toggle(now_ms());
+        continue;
+      }
+      const touch::RawSample& s = e.tap;
       const touch::Point p = touch::to_screen(s, display::orientation());
       ESP_LOGI(kTag, "tap raw=(%u,%u) screen=(%d,%d)", s.x, s.y, p.x, p.y);
       if (!s_menu.tap(p.x, p.y, now_ms()))
