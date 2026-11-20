@@ -1,7 +1,7 @@
 # Build environment for cydium (Podman or Docker). Use ./build.sh rather than
 # calling this directly. Stages:
 #   deps      - OS packages, ESP-IDF source and tools (cached between builds)
-#   build     - compiles src/ from a read-only bind mount
+#   build     - compiles one image (APP) from src/, a read-only bind mount
 #   artifacts - only the build outputs, exported with --output
 
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04
@@ -49,6 +49,9 @@ RUN --mount=type=cache,target=/opt/espressif/dist \
 ########################################################################
 FROM deps AS build
 ARG IDF_TARGET
+# Image to build: "cydium" is the project in src/, any other name is the
+# project in src/apps/<name>/. build.sh checks the name before building.
+ARG APP=cydium
 
 # Only src/ is bind-mounted (bind mounts are read-only by default). The
 # ignore file limits the build context to src/, so the layer cache reruns this step exactly when the
@@ -59,14 +62,15 @@ RUN --mount=type=bind,source=src,target=/src \
     mkdir -p /work/src \
  && cp -a /src/. /work/src/ \
  && . "${IDF_PATH}/export.sh" > /dev/null \
- && cd /work/src \
+ && if [[ $APP == cydium ]]; then proj=/work/src; else proj=/work/src/apps/$APP; fi \
+ && cd "$proj" \
  && idf.py -B /work/build set-target "${IDF_TARGET}" \
  && idf.py -B /work/build build \
  && mkdir -p /out \
  && cd /work/build \
  && cp -- *.bin *.elf *.map flash_args flasher_args.json /out/ \
  && cp --parents -- bootloader/bootloader.bin partition_table/partition-table.bin /out/ \
- && cp -- /work/src/sdkconfig /work/src/dependencies.lock /out/
+ && cp -- "$proj/sdkconfig" "$proj/dependencies.lock" /out/
 
 ########################################################################
 FROM scratch AS artifacts

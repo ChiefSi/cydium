@@ -7,6 +7,10 @@ src/build/
 src/managed_components/
 src/sdkconfig
 src/sdkconfig.old
+src/apps/*/build/
+src/apps/*/managed_components/
+src/apps/*/sdkconfig
+src/apps/*/sdkconfig.old
 
 .venv/
 .vscode/

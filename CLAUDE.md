@@ -9,6 +9,9 @@ paths are relative to `src/`. `README.md` covers setup, build and flashing.
 - Build only with `./build.sh`, which uses Podman or Docker. Never install
   ESP-IDF or run `idf.py` on the host, and never use `sudo` to build. If no
   container engine is available, say the change is unbuilt; don't guess.
+- `./build.sh --target NAME` picks the image: `cydium` (default) is `src/`,
+  other names are extra ESP-IDF projects in `src/apps/NAME/` that share
+  `src/components/` and `src/sdkconfig.defaults` (e.g. `diagnostic`).
 - Only `src/` is in the build context. Everything outside it (README,
   `build/`, scripts) must never affect the firmware build.
 - Hardware behaviour (display, touch, timing, colours) can only be checked by
@@ -38,4 +41,5 @@ paths are relative to `src/`. `README.md` covers setup, build and flashing.
 - Work on feature branches off `main`, and commit only when asked.
 - Use Conventional Commits, with the component as scope, e.g.
   `feat(display): add DMA chunk renderer`, `fix(touch): …`.
-- Commit `src/dependencies.lock`. Never commit `build/` or `sdkconfig`.
+- Commit each project's `dependencies.lock` (`src/` and `src/apps/*/`).
+  Never commit `build/` or `sdkconfig`.
