@@ -42,9 +42,6 @@ constexpr gpio_num_t kBootButton = GPIO_NUM_0;    // active low
 constexpr gpio_num_t kSpeaker = GPIO_NUM_26;
 }  // namespace pins
 
-constexpr int kScreenWidth = 240;
-constexpr int kScreenHeight = 320;
-
 // Initialises backlight PWM (off), BOOT button input, light sensor ADC, and
 // turns the RGB LED off.
 esp_err_t init();

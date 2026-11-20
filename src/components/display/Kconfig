@@ -20,7 +20,8 @@ menu "CYD display"
         default n
         help
             Panels vary between CYD clones. If dark scenes look bright and
-            washed out, flip this. It can also be changed at runtime.
+            washed out, flip this. It is the default for the Invert colours
+            setting in Settings > Display, which is saved in NVS.
 
     config CYD_LCD_SWAP_XY
         bool "Swap X and Y"
@@ -43,6 +44,32 @@ menu "CYD display"
         default y
         help
             Flip if the image is upside down (text reflected vertically).
+
+    choice CYD_DISPLAY_LANDSCAPE_DIR
+        prompt "Landscape direction"
+        default CYD_DISPLAY_LANDSCAPE_USB_RIGHT
+        help
+            Which way the screen turns when the orientation setting is
+            Landscape, relative to portrait with the USB port at the bottom.
+
+        config CYD_DISPLAY_LANDSCAPE_USB_RIGHT
+            bool "USB on the right (rotated anticlockwise)"
+        config CYD_DISPLAY_LANDSCAPE_USB_LEFT
+            bool "USB on the left (rotated clockwise)"
+    endchoice
+
+    choice CYD_DISPLAY_ORIENTATION_DEFAULT
+        prompt "Default orientation"
+        default CYD_DISPLAY_DEFAULT_PORTRAIT
+        help
+            Orientation used until it is changed in Settings > Display (the
+            choice is then saved in NVS).
+
+        config CYD_DISPLAY_DEFAULT_PORTRAIT
+            bool "Portrait"
+        config CYD_DISPLAY_DEFAULT_LANDSCAPE
+            bool "Landscape"
+    endchoice
 
     config CYD_LCD_PROBE
         bool "Log controller ID registers at boot"

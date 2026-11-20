@@ -19,9 +19,7 @@ namespace
 
 constexpr const char* kTag = "display";
 constexpr spi_host_device_t kHost = SPI2_HOST;
-constexpr int kW = board::kScreenWidth;
-constexpr int kH = board::kScreenHeight;
-constexpr size_t kChunkPixels = kW * kChunkRows;
+constexpr size_t kChunkPixels = kMaxWidth * kChunkRows;
 constexpr int kNumBuffers = 2;
 
 esp_lcd_panel_io_handle_t s_io = nullptr;
@@ -29,7 +27,9 @@ esp_lcd_panel_handle_t s_panel = nullptr;
 uint16_t* s_buf[kNumBuffers] = {};
 // Counts buffers that are free (not queued for DMA).
 SemaphoreHandle_t s_free = nullptr;
+int s_next = 0;  // next buffer handed out by acquire_buffer()
 bool s_inverted = false;
+gfx::Orientation s_orientation = gfx::Orientation::kPortrait;
 
 #ifdef CONFIG_CYD_LCD_SWAP_XY
 constexpr bool kSwapXY = true;
@@ -99,6 +99,33 @@ void probe_controller()
 }
 #endif
 
+struct Madctl
+{
+  bool swap;
+  bool mirror_x;
+  bool mirror_y;
+};
+
+// Panel address mapping for each orientation. Portrait comes from Kconfig
+// (checked with the diagnostic image). Rotating by 90 degrees toggles the
+// axis swap; which mirror bit also flips decides the direction, and a
+// 180-degree turn between the two landscapes flips both mirrors. The
+// landscape directions were confirmed on a board: flipping MX with the swap
+// puts the USB port on the right.
+Madctl madctl_for(gfx::Orientation o)
+{
+  switch (o)
+  {
+    case gfx::Orientation::kLandscapeCw:  // USB on the left
+      return {!kSwapXY, kMirrorX, !kMirrorY};
+    case gfx::Orientation::kLandscapeCcw:  // USB on the right
+      return {!kSwapXY, !kMirrorX, kMirrorY};
+    case gfx::Orientation::kPortrait:
+    default:
+      return {kSwapXY, kMirrorX, kMirrorY};
+  }
+}
+
 }  // namespace
 
 esp_err_t init()
@@ -148,15 +175,14 @@ esp_err_t init()
 
   ESP_ERROR_CHECK(esp_lcd_panel_reset(s_panel));
   ESP_ERROR_CHECK(esp_lcd_panel_init(s_panel));
-  ESP_ERROR_CHECK(esp_lcd_panel_swap_xy(s_panel, kSwapXY));
-  ESP_ERROR_CHECK(esp_lcd_panel_mirror(s_panel, kMirrorX, kMirrorY));
+  set_orientation(gfx::Orientation::kPortrait);
   set_invert(kInvertDefault);
 
   fill(0);  // clear any power-on garbage before the backlight comes on
   ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(s_panel, true));
 
-  ESP_LOGI(kTag, "ILI9341 %dx%d ready, pclk %d MHz, inverted=%d", kW, kH, CONFIG_CYD_LCD_PCLK_MHZ,
-           s_inverted);
+  ESP_LOGI(kTag, "ILI9341 %dx%d ready, pclk %d MHz, inverted=%d", width(), height(),
+           CONFIG_CYD_LCD_PCLK_MHZ, s_inverted);
   return ESP_OK;
 }
 
@@ -176,57 +202,104 @@ bool inverted()
   return s_inverted;
 }
 
-void fill_rect(int x0, int y0, int x1, int y1, uint16_t color_be)
+void set_orientation(gfx::Orientation o)
 {
-  if (x0 < 0)
-    x0 = 0;
-  if (y0 < 0)
-    y0 = 0;
-  if (x1 > kW)
-    x1 = kW;
-  if (y1 > kH)
-    y1 = kH;
-  if (x0 >= x1 || y0 >= y1)
-    return;
-  const int w = x1 - x0;
-  const int rows_per_chunk = static_cast<int>(kChunkPixels) / w;
-  int next = 0;
-  for (int y = y0; y < y1; y += rows_per_chunk)
-  {
-    const int rows = (y1 - y < rows_per_chunk) ? (y1 - y) : rows_per_chunk;
-    xSemaphoreTake(s_free, portMAX_DELAY);
-    uint16_t* buf = s_buf[next];
-    next = (next + 1) % kNumBuffers;
-    for (int i = 0; i < w * rows; ++i)
-      buf[i] = color_be;
-    esp_lcd_panel_draw_bitmap(s_panel, x0, y, x1, y + rows, buf);
-  }
-  // Wait for all in-flight chunks, then release the buffers again.
+  wait_idle();
+  const Madctl m = madctl_for(o);
+  esp_lcd_panel_swap_xy(s_panel, m.swap);
+  esp_lcd_panel_mirror(s_panel, m.mirror_x, m.mirror_y);
+  s_orientation = o;
+}
+
+gfx::Orientation orientation()
+{
+  return s_orientation;
+}
+
+int width()
+{
+  return gfx::screen_width(s_orientation);
+}
+
+int height()
+{
+  return gfx::screen_height(s_orientation);
+}
+
+gfx::Orientation landscape_orientation()
+{
+#ifdef CONFIG_CYD_DISPLAY_LANDSCAPE_USB_LEFT
+  return gfx::Orientation::kLandscapeCw;
+#else
+  return gfx::Orientation::kLandscapeCcw;
+#endif
+}
+
+gfx::Orientation default_orientation()
+{
+#ifdef CONFIG_CYD_DISPLAY_DEFAULT_LANDSCAPE
+  return landscape_orientation();
+#else
+  return gfx::Orientation::kPortrait;
+#endif
+}
+
+uint16_t* acquire_buffer()
+{
+  xSemaphoreTake(s_free, portMAX_DELAY);
+  uint16_t* buf = s_buf[s_next];
+  s_next = (s_next + 1) % kNumBuffers;
+  return buf;
+}
+
+void send(int y, int rows, uint16_t* buf)
+{
+  esp_lcd_panel_draw_bitmap(s_panel, 0, y, width(), y + rows, buf);
+}
+
+void wait_idle()
+{
   for (int i = 0; i < kNumBuffers; ++i)
     xSemaphoreTake(s_free, portMAX_DELAY);
   for (int i = 0; i < kNumBuffers; ++i)
     xSemaphoreGive(s_free);
+}
+
+void fill_rect(int x0, int y0, int x1, int y1, uint16_t color_be)
+{
+  x0 = x0 < 0 ? 0 : x0;
+  y0 = y0 < 0 ? 0 : y0;
+  x1 = x1 > width() ? width() : x1;
+  y1 = y1 > height() ? height() : y1;
+  if (x0 >= x1 || y0 >= y1)
+    return;
+  const int w = x1 - x0;
+  const int rows_per_chunk = static_cast<int>(kChunkPixels) / w;
+  for (int y = y0; y < y1; y += rows_per_chunk)
+  {
+    const int rows = (y1 - y < rows_per_chunk) ? (y1 - y) : rows_per_chunk;
+    uint16_t* buf = acquire_buffer();
+    for (int i = 0; i < w * rows; ++i)
+      buf[i] = color_be;
+    esp_lcd_panel_draw_bitmap(s_panel, x0, y, x1, y + rows, buf);
+  }
+  wait_idle();
 }
 
 void blit(int x, int y, int w, int h, const uint16_t* pixels_be)
 {
   if (w <= 0 || h <= 0 || static_cast<size_t>(w * h) > kChunkPixels)
     return;
-  xSemaphoreTake(s_free, portMAX_DELAY);
-  uint16_t* buf = s_buf[0];
+  uint16_t* buf = acquire_buffer();
   for (int i = 0; i < w * h; ++i)
     buf[i] = pixels_be[i];
   esp_lcd_panel_draw_bitmap(s_panel, x, y, x + w, y + h, buf);
-  // Wait for the transfer (and anything else in flight), then release.
-  for (int i = 0; i < kNumBuffers; ++i)
-    xSemaphoreTake(s_free, portMAX_DELAY);
-  for (int i = 0; i < kNumBuffers; ++i)
-    xSemaphoreGive(s_free);
+  wait_idle();
 }
 
 void fill(uint16_t color_be)
 {
-  fill_rect(0, 0, kW, kH, color_be);
+  fill_rect(0, 0, width(), height(), color_be);
 }
 
 }  // namespace display
