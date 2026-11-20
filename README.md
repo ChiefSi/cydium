@@ -177,6 +177,20 @@ Simulation page and restored at boot:
   balls touch are sent to the panel. A tap moves the red ball there.
 - **Starfield:** stars drifting past in three parallax layers. A tap toggles
   warp speed.
+- **Walkers:** small walkers drop from a hatch and have to reach the door.
+  Each level is generated at random, with walls, gaps, deep drops, metal
+  and floors to dig through, and the bar at the bottom gives five skills:
+  digger, builder (a staircase), exploder (3 s fuse, also the only way to
+  stop a walker's skill), blocker and umbrella (an add-on for slow falls).
+  The level banner says how many walkers must be saved out of how many.
+  - An autopilot plays by default, like a player working the level out: it
+    pauses to look at new obstacles, makes the odd mistake and gets better
+    on retries. Every level is played through by the autopilot before it is
+    shown, so each one can be won.
+  - Touch to take over: tap a skill button, then a walker. The status line
+    shows `YOU`; the autopilot takes back over after 20 s without a touch.
+  - A lost level offers Retry or New (the autopilot picks one if you
+    don't). Rotating the screen starts a new level.
 
 Taps away from the menu icon go to the simulation. Every 5 seconds the serial log shows
 `N fps, N chunks/frame, heap free=… largest=…`, and each tap is logged with
@@ -195,6 +209,8 @@ the menu over the dimmed scene:
   - **Invert colours** (checkbox);
   - **Orientation:** Portrait or Landscape;
   - **Menu icon:** which corner the icon sits in.
+- **Settings > Walkers > Difficulty:** Easy (unlimited skills), Medium (a
+  few spare skills) or Hard (one spare of each). Applies from the next level.
 
 Tap a checkbox to toggle it and a choice to cycle it. Changes apply at once
 and are saved in NVS, so they survive a reboot. `<` goes back; `x`, a tap
@@ -371,7 +387,8 @@ src/                  the ESP-IDF project (the only thing the build sees)
     settings/         bool/enum settings registry saved in NVS
     sim/              hardware-free: Simulation interface, Manager, Surface,
                       Rng
-    sims/             one component per simulation (bounce, starfield)
+    sims/             one component per simulation (bounce, starfield,
+                      walkers)
     touch/            bit-banged XPT2046, Kconfig calibration
     ui/               menu overlay, icon PNG and converter
   test/               host unit tests (./build.sh --test)

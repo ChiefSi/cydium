@@ -14,6 +14,7 @@ constexpr const char* kTag = "settings";
 constexpr const char* kNamespace = "cydium";
 
 constexpr const char* kOrientationOptions[] = {"Portrait", "Landscape"};
+constexpr const char* kDifficultyOptions[] = {"Easy", "Medium", "Hard"};
 constexpr const char* kCornerOptions[] = {"Top left", "Top right", "Bottom left", "Bottom right"};
 
 #ifdef CONFIG_CYD_LCD_INVERT_DEFAULT
@@ -47,6 +48,7 @@ constexpr Info kInfo[kCount] = {
     // Chosen on the menu's Simulation page; an index past the registered
     // simulations falls back to the first one.
     {"sim.active", nullptr, "Simulation", Type::kEnum, nullptr, 255, 0},
+    {"walk.level", "Walkers", "Difficulty", Type::kEnum, kDifficultyOptions, 3, kMedium},
 };
 
 uint8_t s_values[kCount] = {};

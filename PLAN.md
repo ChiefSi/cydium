@@ -3,7 +3,8 @@
 Status (2026-11-20): Phases 1 and 2 are done. Phase 3 has started (the
 `sim` framework with two demo scenes, Bounce and Starfield, chosen from the
 menu) and so has Phase 4 (the menu with Simulation, About and display
-settings). Deviations from this plan so far:
+settings). Walkers (Phase 7) is in, ahead of the rest. Deviations from this
+plan so far:
 
 - **Orientation:** landscape (320×240) is supported as well as portrait, as a
   menu setting. Layers keep the same 4 strips and are just reinterpreted.
@@ -19,6 +20,12 @@ settings). Deviations from this plan so far:
 - **Emulator:** not in the original plan. `./build.sh` also builds the
   image for IDF's `linux` target, with the screen on a local web page and
   the mouse as touch (`components/emulator`).
+- **Walkers:** levels are generated as a stack of floors, each with a
+  challenge that has a known fix (dig, build over a wall or across a gap,
+  umbrellas for a deep drop, block then dig at an abyss), and checked by
+  playing them with the autopilot before they are shown. Skill counts come
+  from the plan plus the Difficulty setting. An autopilot plays unless the
+  user has touched the screen in the last 20 s. No events yet (Phase 5).
 - **Overlays:** the menu draws straight into the output chunks (a renderer
   `Overlay`), so it needs no third layer.
 

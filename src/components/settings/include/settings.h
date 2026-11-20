@@ -21,6 +21,7 @@ enum class Id : uint8_t
   kOrientation,   // enum: Orientation
   kIconPosition,  // enum: Corner
   kSimulation,    // index of the active simulation (not in a settings group)
+  kWalkersLevel,  // enum: Difficulty of the Walkers simulation
   kCount,
 };
 
@@ -29,6 +30,14 @@ enum Orientation : uint8_t
 {
   kPortrait = 0,
   kLandscape = 1,
+};
+
+// Values of Id::kWalkersLevel.
+enum Difficulty : uint8_t
+{
+  kEasy = 0,
+  kMedium = 1,
+  kHard = 2,
 };
 
 // Values of Id::kIconPosition.

@@ -23,6 +23,7 @@
 #include "sim.h"
 #include "starfield.h"
 #include "touch.h"
+#include "walkers.h"
 
 namespace
 {
@@ -72,6 +73,10 @@ class RendererSurface : public sim::Surface
   {
     r_.invalidate_all();
   }
+  gfx::Rect reserved() override
+  {
+    return s_menu.icon_area();
+  }
 
  private:
   display::Renderer& r_;
@@ -83,6 +88,7 @@ sim::Manager s_sims(s_surface);
 // The registered simulations, in menu order.
 bounce::Bounce s_bounce;
 starfield::Starfield s_starfield;
+walkers::Walkers s_walkers;
 
 void select_simulation(int index)
 {
@@ -103,8 +109,8 @@ void apply_orientation()
 {
   display::set_orientation(orientation_from_setting());
   s_renderer.resize();
+  s_menu.relayout();  // first: simulations keep clear of the icon
   s_sims.restart();
-  s_menu.relayout();
 }
 
 void on_setting_changed(settings::Id id, uint8_t value, void*)
@@ -122,6 +128,9 @@ void on_setting_changed(settings::Id id, uint8_t value, void*)
       break;
     case settings::Id::kSimulation:
       select_simulation(value);
+      break;
+    case settings::Id::kWalkersLevel:
+      s_walkers.set_difficulty(static_cast<walkers::Difficulty>(value));
       break;
     default:
       break;
@@ -192,8 +201,11 @@ extern "C" void app_main()
   s_sims.seed(esp_random());
   s_sims.add(s_bounce);
   s_sims.add(s_starfield);
+  s_sims.add(s_walkers);
+  s_walkers.set_difficulty(
+      static_cast<walkers::Difficulty>(settings::get(settings::Id::kWalkersLevel)));
+  s_menu.begin(s_renderer, s_sims);  // first: simulations keep clear of the icon
   select_simulation(settings::get(settings::Id::kSimulation));
-  s_menu.begin(s_renderer, s_sims);
   settings::set_listener(on_setting_changed, nullptr);
   s_renderer.present();
   board::set_backlight(255);

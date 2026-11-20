@@ -21,17 +21,25 @@ add_executable(host_tests
     test_gfx.cpp
     test_touch_map.cpp
     test_sim.cpp
+    test_walkers.cpp
     "${components}/gfx/font8x8.cpp"
     "${components}/gfx/layer.cpp"
     "${components}/sim/manager.cpp"
     "${components}/sims/bounce/bounce.cpp"
-    "${components}/sims/starfield/starfield.cpp")
+    "${components}/sims/starfield/starfield.cpp"
+    "${components}/sims/walkers/art.cpp"
+    "${components}/sims/walkers/autopilot.cpp"
+    "${components}/sims/walkers/generator.cpp"
+    "${components}/sims/walkers/terrain.cpp"
+    "${components}/sims/walkers/walkers.cpp"
+    "${components}/sims/walkers/world.cpp")
 target_include_directories(host_tests PRIVATE
     "${components}/gfx/include"
     "${components}/touch/include"
     "${components}/sim/include"
     "${components}/sims/bounce/include"
-    "${components}/sims/starfield/include")
+    "${components}/sims/starfield/include"
+    "${components}/sims/walkers/include")
 target_compile_options(host_tests PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(host_tests PRIVATE unity)
 

@@ -41,6 +41,12 @@ class Menu : public display::Overlay
   // Closes the menu once CYD_MENU_TIMEOUT_S passes without a tap.
   void tick(uint32_t now_ms);
 
+  // Where the closed menu's icon takes taps (icon plus margin).
+  const gfx::Rect& icon_area() const
+  {
+    return icon_hit_;
+  }
+
   bool is_open() const
   {
     return page_ != Page::kClosed;

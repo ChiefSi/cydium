@@ -5,6 +5,7 @@
 #include "sim.h"
 #include "starfield.h"
 #include "unity.h"
+#include "walkers.h"
 
 namespace
 {
@@ -218,6 +219,12 @@ void test_starfield_runs()
   exercise(sf);
 }
 
+void test_walkers_runs()
+{
+  walkers::Walkers w;
+  exercise(w);
+}
+
 }  // namespace
 
 void run_sim_tests()
@@ -227,4 +234,5 @@ void run_sim_tests()
   RUN_TEST(test_manager_handles_failed_begin);
   RUN_TEST(test_bounce_runs);
   RUN_TEST(test_starfield_runs);
+  RUN_TEST(test_walkers_runs);
 }
