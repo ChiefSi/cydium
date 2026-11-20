@@ -2,13 +2,18 @@
 
 #include <cstdint>
 
-#include "driver/gpio.h"
 #include "esp_err.h"
+#include "sdkconfig.h"
+
+#ifndef CONFIG_IDF_TARGET_LINUX
+#include "driver/gpio.h"
+#endif
 
 // Pin map for the ESP32-2432S028R ("Cheap Yellow Display").
 namespace board
 {
 
+#ifndef CONFIG_IDF_TARGET_LINUX  // the emulator has no pins
 namespace pins
 {
 // TFT (ILI9341) on SPI2_HOST
@@ -41,6 +46,7 @@ constexpr gpio_num_t kLedB = GPIO_NUM_17;         // active low
 constexpr gpio_num_t kBootButton = GPIO_NUM_0;    // active low
 constexpr gpio_num_t kSpeaker = GPIO_NUM_26;
 }  // namespace pins
+#endif
 
 // Initialises backlight PWM (off), BOOT button input, light sensor ADC, and
 // turns the RGB LED off.

@@ -16,6 +16,9 @@ settings). Deviations from this plan so far:
   with a seedable `sim::Rng` instead of `esp_random()`, so they run in host
   tests. `update`/`render` are one `step(ctx, dt_ms)`; `begin` also runs
   again after an orientation change; events and `onHold` come with Phase 5.
+- **Emulator:** not in the original plan. `./build.sh` also builds the
+  image for IDF's `linux` target, with the screen on a local web page and
+  the mouse as touch (`components/emulator`).
 - **Overlays:** the menu draws straight into the output chunks (a renderer
   `Overlay`), so it needs no third layer.
 

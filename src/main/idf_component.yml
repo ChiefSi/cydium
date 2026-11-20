@@ -1,4 +1,7 @@
 dependencies:
   idf: ">=5.5"
   # Used by the storage component from Phase 3 onwards.
-  joltwallet/littlefs: "^1.14.8"
+  joltwallet/littlefs:
+    version: "^1.14.8"
+    rules:
+      - if: "target != linux"  # not needed by the emulator yet

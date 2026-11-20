@@ -226,24 +226,6 @@ int height()
   return gfx::screen_height(s_orientation);
 }
 
-gfx::Orientation landscape_orientation()
-{
-#ifdef CONFIG_CYD_DISPLAY_LANDSCAPE_USB_LEFT
-  return gfx::Orientation::kLandscapeCw;
-#else
-  return gfx::Orientation::kLandscapeCcw;
-#endif
-}
-
-gfx::Orientation default_orientation()
-{
-#ifdef CONFIG_CYD_DISPLAY_DEFAULT_LANDSCAPE
-  return landscape_orientation();
-#else
-  return gfx::Orientation::kPortrait;
-#endif
-}
-
 uint16_t* acquire_buffer()
 {
   xSemaphoreTake(s_free, portMAX_DELAY);

@@ -3,9 +3,13 @@
 #include <cstdint>
 
 #include "esp_err.h"
-#include "esp_lcd_types.h"
 #include "gfx/color.h"
 #include "gfx/orientation.h"
+#include "sdkconfig.h"
+
+#ifndef CONFIG_IDF_TARGET_LINUX
+#include "esp_lcd_types.h"
+#endif
 
 namespace display
 {
@@ -14,10 +18,13 @@ constexpr int kChunkRows = 16;
 constexpr int kMaxWidth = 320;  // landscape width; chunk buffers are sized for it
 
 // Sets up SPI2_HOST, the panel IO and the ILI9341 panel in portrait, and two
-// DMA-capable chunk buffers of kMaxWidth x kChunkRows RGB565 pixels.
+// DMA-capable chunk buffers of kMaxWidth x kChunkRows RGB565 pixels. In the
+// emulator (linux target) it starts the emulator's web page instead.
 esp_err_t init();
 
+#ifndef CONFIG_IDF_TARGET_LINUX
 esp_lcd_panel_handle_t panel();
+#endif
 
 void set_invert(bool invert);
 bool inverted();

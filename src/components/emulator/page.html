@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cydium emulator</title>
+<style>
+  :root {
+    --bg: #1b1d22;
+    --text: #d7dae0;
+    --muted: #8b919c;
+    --pcb: #e8b923;
+    --pcb-edge: #b98f12;
+    --bezel: #0b0b0c;
+    --accent: #ffc440;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.4 system-ui, sans-serif;
+  }
+  .board {
+    background: var(--pcb);
+    border: 2px solid var(--pcb-edge);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.5);
+  }
+  .bezel {
+    background: var(--bezel);
+    padding: 6px;
+    border-radius: 4px;
+    line-height: 0;
+  }
+  canvas {
+    image-rendering: pixelated;
+    cursor: crosshair;
+    touch-action: none;
+    background: #000;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+  }
+  button, select {
+    font: inherit;
+    color: var(--text);
+    background: #2a2d34;
+    border: 1px solid #444954;
+    border-radius: 6px;
+    padding: 6px 12px;
+  }
+  button:active, button.held { background: var(--accent); color: #000; }
+  .status { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 22ch; }
+  .status.off { color: #ff7a6b; }
+</style>
+</head>
+<body>
+<div class="board"><div class="bezel"><canvas id="screen" width="240" height="320"></canvas></div></div>
+<div class="controls">
+  <button id="boot" title="BOOT button (B key)">BOOT</button>
+  <label>Zoom
+    <select id="zoom">
+      <option value="1">1×</option>
+      <option value="2" selected>2×</option>
+      <option value="3">3×</option>
+    </select>
+  </label>
+  <span id="status" class="status">connecting…</span>
+</div>
+<script>
+"use strict";
+const canvas = document.getElementById("screen");
+const ctx = canvas.getContext("2d");
+const statusEl = document.getElementById("status");
+const zoomEl = document.getElementById("zoom");
+const bootEl = document.getElementById("boot");
+let image = null;
+let since = 0;
+let frames = 0;
+let lastFps = performance.now();
+let fps = 0;
+
+try { zoomEl.value = localStorage.getItem("cydium-zoom") || zoomEl.value; } catch (e) {}
+
+function applyZoom() {
+  const z = Number(zoomEl.value);
+  canvas.style.width = canvas.width * z + "px";
+  canvas.style.height = canvas.height * z + "px";
+}
+zoomEl.addEventListener("change", () => {
+  try { localStorage.setItem("cydium-zoom", zoomEl.value); } catch (e) {}
+  applyZoom();
+});
+applyZoom();
+
+function setStatus(text, ok) {
+  statusEl.textContent = text;
+  statusEl.classList.toggle("off", !ok);
+}
+
+// Frame: little-endian header (seq u32, width u16, height u16, invert u8,
+// backlight u8, orientation u8, pad u8), then big-endian RGB565 pixels.
+function draw(buf) {
+  const dv = new DataView(buf);
+  since = dv.getUint32(0, true);
+  const w = dv.getUint16(4, true);
+  const h = dv.getUint16(6, true);
+  const invert = dv.getUint8(8) !== 0;
+  const backlight = dv.getUint8(9);
+  if (!image || canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+    image = ctx.createImageData(w, h);
+    applyZoom();
+  }
+  const px = new Uint8Array(buf, 12);
+  const d = image.data;
+  for (let i = 0, o = 0; i < w * h; i++) {
+    const v = (px[2 * i] << 8) | px[2 * i + 1];
+    let r = (v >> 11) & 31, g = (v >> 5) & 63, b = v & 31;
+    r = (r << 3) | (r >> 2);
+    g = (g << 2) | (g >> 4);
+    b = (b << 3) | (b >> 2);
+    if (invert) { r = 255 - r; g = 255 - g; b = 255 - b; }
+    d[o++] = r; d[o++] = g; d[o++] = b; d[o++] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  canvas.style.filter = backlight === 255 ? "" : `brightness(${backlight / 255})`;
+}
+
+async function poll() {
+  for (;;) {
+    try {
+      const r = await fetch(`/frame?since=${since}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(r.status);
+      draw(await r.arrayBuffer());
+      frames++;
+      const now = performance.now();
+      if (now - lastFps >= 1000) {
+        fps = Math.round(frames * 1000 / (now - lastFps));
+        frames = 0;
+        lastFps = now;
+      }
+      setStatus(`${canvas.width}×${canvas.height} · ${fps} fps`, true);
+    } catch (e) {
+      setStatus("disconnected – is the emulator running?", false);
+      await new Promise(res => setTimeout(res, 1000));
+    }
+  }
+}
+
+// Input requests go out one at a time, in order, so a quick click's release
+// can never overtake its press. Moves while one is queued are merged.
+let chain = Promise.resolve();
+let pendingMove = null;
+function post(url) {
+  chain = chain.then(() => fetch(url, { method: "POST" }).catch(() => {}));
+}
+function point(e) {
+  const r = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / r.width * canvas.width);
+  const y = Math.floor((e.clientY - r.top) / r.height * canvas.height);
+  return {
+    x: Math.min(canvas.width - 1, Math.max(0, x)),
+    y: Math.min(canvas.height - 1, Math.max(0, y)),
+  };
+}
+let penDown = false;
+canvas.addEventListener("pointerdown", e => {
+  if (e.button !== 0) return;
+  canvas.setPointerCapture(e.pointerId);
+  penDown = true;
+  const p = point(e);
+  post(`/touch?down=1&x=${p.x}&y=${p.y}`);
+});
+canvas.addEventListener("pointermove", e => {
+  if (!penDown) return;
+  const first = pendingMove === null;
+  pendingMove = point(e);
+  if (first) {
+    chain = chain.then(() => {
+      const p = pendingMove;
+      pendingMove = null;
+      return fetch(`/touch?down=1&x=${p.x}&y=${p.y}`, { method: "POST" }).catch(() => {});
+    });
+  }
+});
+function release() {
+  if (!penDown) return;
+  penDown = false;
+  post("/touch?down=0");
+}
+canvas.addEventListener("pointerup", release);
+canvas.addEventListener("pointercancel", release);
+
+function boot(down) {
+  bootEl.classList.toggle("held", down);
+  post(`/button?down=${down ? 1 : 0}`);
+}
+bootEl.addEventListener("pointerdown", () => boot(true));
+bootEl.addEventListener("pointerup", () => boot(false));
+bootEl.addEventListener("pointerleave", e => { if (e.buttons) boot(false); });
+addEventListener("keydown", e => { if (e.key === "b" && !e.repeat) boot(true); });
+addEventListener("keyup", e => { if (e.key === "b") boot(false); });
+
+poll();
+</script>
+</body>
+</html>

@@ -29,6 +29,8 @@ namespace
 
 constexpr const char* kTag = "app";
 constexpr int kFrameMs = 33;  // ~30 fps target
+// Input runs on the app core (1), next to rendering; the emulator has one core.
+constexpr BaseType_t kInputCore = portNUM_PROCESSORS > 1 ? 1 : 0;
 
 display::Renderer s_renderer;
 ui::Menu s_menu;
@@ -168,7 +170,7 @@ extern "C" void app_main()
 
   ESP_ERROR_CHECK(touch::init());
   s_taps = xQueueCreate(8, sizeof(touch::RawSample));
-  xTaskCreatePinnedToCore(input_task, "input", 3072, nullptr, 5, nullptr, 1);
+  xTaskCreatePinnedToCore(input_task, "input", 3072, nullptr, 5, nullptr, kInputCore);
 
   int frames = 0;
   int chunks = 0;

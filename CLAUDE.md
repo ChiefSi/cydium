@@ -16,6 +16,12 @@ paths are relative to `src/`. `README.md` covers setup, build and flashing.
   `build/`, scripts) must never affect the firmware build. The one exception
   is the version: `build.sh` passes `git describe` (plus `-dirty`)
   in as the `CYD_GIT_DESCRIBE` build argument, read by `buildinfo`.
+- `./build.sh` also builds the emulator: the `src/` project for IDF's
+  `linux` target (`--no-build-emulator` skips it). Hardware components
+  (`board`, `display`, `touch`) pick `*_linux.cpp` sources on that target
+  and talk to `src/components/emulator`; keep their headers free of driver
+  types on linux. Code shared by both builds must not assume two cores. The
+  emulator binary is linked statically so it runs on the EL9 host.
 - Run the host unit tests with `./build.sh --test` (`--no-build` to skip the
   firmware). They live in `src/test/` and cover the hardware-free code; add
   tests there when changing `gfx`, `touch_map.h` or the PNG converter.
