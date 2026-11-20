@@ -1,0 +1,45 @@
+menu "CYD touch"
+
+    comment "Raw XPT2046 readings (0-4095) at the screen edges, in portrait."
+    comment "Defaults calibrated on a CYD; re-run with the diagnostic image."
+
+    config CYD_TOUCH_X_MIN
+        int "Raw X minimum"
+        range 0 4095
+        default 261
+
+    config CYD_TOUCH_X_MAX
+        int "Raw X maximum"
+        range 0 4095
+        default 3843
+
+    config CYD_TOUCH_Y_MIN
+        int "Raw Y minimum"
+        range 0 4095
+        default 196
+
+    config CYD_TOUCH_Y_MAX
+        int "Raw Y maximum"
+        range 0 4095
+        default 3847
+
+    config CYD_TOUCH_SWAP_XY
+        bool "Raw X measures the screen's vertical axis"
+        default n
+        help
+            Turn on if raw X changes when moving up and down the portrait
+            screen (along the long, 320 px edge) rather than across it.
+
+    config CYD_TOUCH_FLIP_X
+        bool "Flip screen X"
+        default y
+        help
+            Turn on if, in portrait, touches on the left register on the right.
+
+    config CYD_TOUCH_FLIP_Y
+        bool "Flip screen Y"
+        default n
+        help
+            Turn on if, in portrait, touches at the top register at the bottom.
+
+endmenu

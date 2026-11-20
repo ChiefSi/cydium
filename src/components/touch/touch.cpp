@@ -3,6 +3,7 @@
 #include "board.h"
 #include "driver/gpio.h"
 #include "esp_rom_sys.h"
+#include "sdkconfig.h"
 
 namespace touch
 {
@@ -50,7 +51,34 @@ uint16_t transfer(uint8_t cmd)
   return static_cast<uint16_t>((v >> 3) & 0x0FFF);
 }
 
+constexpr Calibration kCalibration = {
+    CONFIG_CYD_TOUCH_X_MIN,
+    CONFIG_CYD_TOUCH_X_MAX,
+    CONFIG_CYD_TOUCH_Y_MIN,
+    CONFIG_CYD_TOUCH_Y_MAX,
+#ifdef CONFIG_CYD_TOUCH_SWAP_XY
+    true,
+#else
+    false,
+#endif
+#ifdef CONFIG_CYD_TOUCH_FLIP_X
+    true,
+#else
+    false,
+#endif
+#ifdef CONFIG_CYD_TOUCH_FLIP_Y
+    true,
+#else
+    false,
+#endif
+};
+
 }  // namespace
+
+const Calibration& calibration()
+{
+  return kCalibration;
+}
 
 esp_err_t init()
 {
