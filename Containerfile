@@ -2,6 +2,7 @@
 # calling this directly. Stages:
 #   deps      - OS packages, ESP-IDF source and tools (cached between builds)
 #   build     - compiles one image (APP) from src/, a read-only bind mount
+#   test      - builds and runs the host unit tests in src/test
 #   artifacts - only the build outputs, exported with --output
 
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04
@@ -52,6 +53,9 @@ ARG IDF_TARGET
 # Image to build: "cydium" is the project in src/, any other name is the
 # project in src/apps/<name>/. build.sh checks the name before building.
 ARG APP=cydium
+# `git describe` of the checkout, from build.sh (the context has no .git).
+# Read by the buildinfo component; changing it reruns the build step.
+ARG CYD_GIT_DESCRIBE=unknown
 
 # Only src/ is bind-mounted (bind mounts are read-only by default). The
 # ignore file limits the build context to src/, so the layer cache reruns this step exactly when the
@@ -71,6 +75,21 @@ RUN --mount=type=bind,source=src,target=/src \
  && cp -- *.bin *.elf *.map flash_args flasher_args.json /out/ \
  && cp --parents -- bootloader/bootloader.bin partition_table/partition-table.bin /out/ \
  && cp -- "$proj/sdkconfig" "$proj/dependencies.lock" /out/
+
+########################################################################
+FROM deps AS test
+# Host unit tests (src/test): gfx and touch mapping in C++ with Unity from
+# ESP-IDF, plus the PNG converter in Python. Run by ./build.sh --test.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
+ && apt-get install -y --no-install-recommends g++
+
+RUN --mount=type=bind,source=src,target=/src \
+    export PYTHONDONTWRITEBYTECODE=1 \
+ && cmake -S /src/test -B /tmp/test -G Ninja \
+ && cmake --build /tmp/test \
+ && ctest --test-dir /tmp/test --output-on-failure
 
 ########################################################################
 FROM scratch AS artifacts

@@ -3,12 +3,14 @@
 # the serial console. Can be run from any directory; the script must live at
 # the repository root.
 #
-# Usage: build.sh [--target NAME] [--no-build] [--flash] [--console]
+# Usage: build.sh [--target NAME] [--test] [--no-build] [--flash] [--console]
 #                 [--port DEV] [ENGINE BUILD ARGS...]
 #
 #   --target NAME  image to build (default: cydium). "cydium" is the project
 #                  in src/; any other name is the project in src/apps/NAME/,
 #                  e.g. "diagnostic".
+#   --test         run the host unit tests (src/test) in the container first;
+#                  the build is skipped if they fail
 #   --no-build     skip the build and use the existing output in OUT_DIR, e.g.
 #                  to reflash or just open the console
 #   --flash        after building, flash the image with esptool from .venv
@@ -49,6 +51,7 @@ ROOT=$(cd -P "$(dirname "$src")" && pwd)
 # ---------------------------------------------------------------- arguments
 TARGET=cydium
 BUILD=1
+TEST=0
 FLASH=0
 CONSOLE=0
 PORT=${PORT:-/dev/ttyUSB0}
@@ -62,6 +65,7 @@ while (($#)); do
       shift 2
       ;;
     --target=*) TARGET=${1#*=}; shift ;;
+    --test) TEST=1; shift ;;
     --no-build) BUILD=0; shift ;;
     --flash) FLASH=1; shift ;;
     --console) CONSOLE=1; shift ;;
@@ -95,12 +99,12 @@ else
   exit 2
 fi
 
-if ((!BUILD)) && ((${#engine_args[@]})); then
+if ((!BUILD && !TEST)) && ((${#engine_args[@]})); then
   echo "--no-build: unexpected arguments: ${engine_args[*]}" >&2
   exit 2
 fi
-if ((!BUILD && !FLASH && !CONSOLE)); then
-  echo "--no-build without --flash or --console has nothing to do" >&2
+if ((!BUILD && !TEST && !FLASH && !CONSOLE)); then
+  echo "--no-build without --test, --flash or --console has nothing to do" >&2
   exit 2
 fi
 
@@ -122,7 +126,7 @@ if ((FLASH || CONSOLE)); then
 fi
 
 ENGINE=${CONTAINER_ENGINE:-}
-if ((BUILD)) && [[ -z $ENGINE ]]; then
+if ((BUILD || TEST)) && [[ -z $ENGINE ]]; then
   if command -v podman > /dev/null; then
     ENGINE=podman
   elif command -v docker > /dev/null; then
@@ -166,23 +170,48 @@ if [[ $OUT_DIR == "$(cd -P ~ && pwd)" ]]; then
 fi
 TMP_DIR="${OUT_DIR}.tmp"
 
+# ---------------------------------------------------------------- engine
+engine_common=()
+case $ENGINE in
+  # Podman: the OCI image format ignores SHELL, so use the Docker format.
+  *podman*) engine_common+=(--format docker --layers) ;;
+  # Docker: --output and RUN --mount need BuildKit (default since Docker 23).
+  *docker*) export DOCKER_BUILDKIT=1 ;;
+esac
+[[ -n ${IDF_VERSION:-} ]] && engine_common+=(--build-arg "IDF_VERSION=${IDF_VERSION}")
+[[ -n ${IDF_TARGET:-} ]] && engine_common+=(--build-arg "IDF_TARGET=${IDF_TARGET}")
+
+# ---------------------------------------------------------------- test
+if ((TEST)); then
+  echo "Running host unit tests (src/test)"
+  # A cached result means src/ is unchanged since the tests last passed.
+  "$ENGINE" build --target test "${engine_common[@]}" \
+    ${engine_args[@]+"${engine_args[@]}"} -f "$ROOT/Containerfile" "$ROOT"
+  echo "Host unit tests passed"
+fi
+
 # ---------------------------------------------------------------- build
 if ((BUILD)); then
   args=(
     --target artifacts
     --output "type=local,dest=${TMP_DIR}"
     --build-arg "APP=${TARGET}"
+    ${engine_common[@]+"${engine_common[@]}"}
   )
-  case $ENGINE in
-    # Podman: the OCI image format ignores SHELL, so use the Docker format.
-    *podman*) args+=(--format docker --layers) ;;
-    # Docker: --output and RUN --mount need BuildKit (default since Docker 23).
-    *docker*) export DOCKER_BUILDKIT=1 ;;
-  esac
-  [[ -n ${IDF_VERSION:-} ]] && args+=(--build-arg "IDF_VERSION=${IDF_VERSION}")
-  [[ -n ${IDF_TARGET:-} ]] && args+=(--build-arg "IDF_TARGET=${IDF_TARGET}")
 
-  echo "Building target '$TARGET' ($PROJECT_DIR)"
+  # Version source (see CYD_VERSION_* in Kconfig). The container
+  # can't see .git, so describe the checkout here; -dirty marks any change,
+  # including untracked files.
+  git_describe=unknown
+  if git -C "$ROOT" rev-parse --git-dir > /dev/null 2>&1; then
+    git_describe=$(git -C "$ROOT" describe --tags --always 2> /dev/null || echo unknown)
+    if [[ -n $(git -C "$ROOT" status --porcelain 2> /dev/null) ]]; then
+      git_describe+=-dirty
+    fi
+  fi
+  args+=(--build-arg "CYD_GIT_DESCRIBE=${git_describe}")
+
+  echo "Building target '$TARGET' ($PROJECT_DIR), ${git_describe}"
   rm -rf "${TMP_DIR}"
   "$ENGINE" build "${args[@]}" ${engine_args[@]+"${engine_args[@]}"} \
     -f "$ROOT/Containerfile" "$ROOT"
