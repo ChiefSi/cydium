@@ -1,0 +1,8 @@
+# Applied on top of src/sdkconfig.defaults.
+
+# Same partition table as cydium, so flashing either image leaves the other's
+# data partitions (nvs, storage) alone.
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="../../partitions.csv"
+
+# Log the LCD controller's ID registers at boot.
+CONFIG_CYD_LCD_PROBE=y
