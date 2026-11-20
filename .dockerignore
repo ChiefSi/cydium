@@ -1,0 +1,10 @@
+# Allow-list: the build context is src/ only, so changes anywhere else
+# (README, build output, .git, ...) never invalidate the build cache.
+*
+!src/
+
+# Generated files, in case a native idf.py build was ever run inside src/.
+src/build/
+src/managed_components/
+src/sdkconfig
+src/sdkconfig.old

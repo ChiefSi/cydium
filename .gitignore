@@ -1,0 +1,16 @@
+# build.sh output
+build/
+build.tmp/
+
+# native idf.py output, if ever run inside src/
+src/build/
+src/managed_components/
+src/sdkconfig
+src/sdkconfig.old
+
+.venv/
+.vscode/
+.cache/
+compile_commands.json
+*.pyc
+.*.swp

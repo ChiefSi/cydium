@@ -1,0 +1,26 @@
+menu "CYD display"
+
+    config CYD_LCD_PCLK_MHZ
+        int "SPI pixel clock (MHz)"
+        range 10 80
+        default 40
+        help
+            Start at 40 MHz. The TFT is on HSPI's IO_MUX pins, so 60-80 MHz
+            may work; keep the fastest clock that is stable on your board.
+
+    config CYD_LCD_INVERT_DEFAULT
+        bool "Invert colours by default"
+        default n
+        help
+            Panels vary between CYD clones. If dark scenes look bright and
+            washed out, flip this. It can also be changed at runtime.
+
+    config CYD_LCD_MIRROR_X
+        bool "Mirror X"
+        default n
+
+    config CYD_LCD_MIRROR_Y
+        bool "Mirror Y"
+        default n
+
+endmenu

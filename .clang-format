@@ -1,0 +1,8 @@
+# Google style with Allman braces (every opening brace on its own line).
+BasedOnStyle: Google
+ColumnLimit: 100
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+IncludeBlocks: Preserve

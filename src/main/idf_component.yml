@@ -1,0 +1,4 @@
+dependencies:
+  idf: ">=5.5"
+  # Used by the storage component from Phase 3 onwards.
+  joltwallet/littlefs: "^1.14.8"
