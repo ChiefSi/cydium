@@ -184,8 +184,8 @@ its raw and screen coordinates.
 
 ### Menu
 
-Tap the menu icon (top left by default) to open the menu over the dimmed
-scene:
+Tap the menu icon (top left by default), or press the BOOT button, to open
+the menu over the dimmed scene:
 
 - **Simulation:** the simulations, with the running one highlighted. Tap one
   to switch to it; the menu closes.
@@ -197,9 +197,9 @@ scene:
   - **Menu icon:** which corner the icon sits in.
 
 Tap a checkbox to toggle it and a choice to cycle it. Changes apply at once
-and are saved in NVS, so they survive a reboot. `<` goes back, `x` (or a tap
-outside the panel) closes, and the menu closes by itself after 10 seconds
-without a touch.
+and are saved in NVS, so they survive a reboot. `<` goes back; `x`, a tap
+outside the panel or the BOOT button closes; and the menu closes by itself
+after 10 seconds without a touch.
 
 The defaults and the icon come from Kconfig. To change them, add the options
 to `src/sdkconfig.defaults` (shared by both images) and rebuild:

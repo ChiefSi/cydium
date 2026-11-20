@@ -25,8 +25,9 @@ void set_invert(bool invert);
 void set_backlight(uint8_t level);
 
 // The pen, in the coordinates of the screen as it was shown when the mouse
-// was pressed. A press reads as down for at least kMinPressMs, so a quick
-// click isn't missed by the 20 ms touch polling.
+// was pressed. A press (pen or BOOT button) reads as down for at least
+// kMinPressMs, so a quick click survives the firmware's 20 ms polling and the
+// BOOT button's two-sample debounce.
 struct Touch
 {
   bool down;
@@ -34,7 +35,7 @@ struct Touch
   int y;
   gfx::Orientation orientation;
 };
-constexpr int kMinPressMs = 60;
+constexpr int kMinPressMs = 100;
 Touch touch();
 
 bool boot_button();

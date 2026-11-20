@@ -272,6 +272,15 @@ bool Menu::tap(int x, int y, uint32_t now_ms)
   return true;  // inside the panel but not on an item
 }
 
+void Menu::toggle(uint32_t now_ms)
+{
+  last_tap_ms_ = now_ms;
+  if (is_open())
+    close();
+  else
+    open(Page::kRoot);
+}
+
 void Menu::tick(uint32_t now_ms)
 {
   if (is_open() && kTimeoutMs > 0 && now_ms - last_tap_ms_ >= kTimeoutMs)
