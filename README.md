@@ -4,9 +4,10 @@ Ambient pixel-art simulations for the ESP32-2432S028R ("Cheap Yellow
 Display"), written in C++ on plain ESP-IDF. See [PLAN.md](PLAN.md) for the
 design and roadmap.
 
-**Status:** Phase 2 (renderer) with the start of Phase 4 (menu): indexed
-layers composited to the panel in dirty 16-row chunks, a test scene, and a
-settings menu (About, plus display settings saved in NVS). A
+**Status:** Phase 2 (renderer), the start of Phase 3 (simulation framework)
+and of Phase 4 (menu): indexed layers composited to the panel in dirty 16-row
+chunks, two demo simulations chosen from the menu, and display settings
+saved in NVS. A
 [diagnostic image](#diagnostic-image) helps work out a board's panel and touch
 settings.
 
@@ -157,16 +158,22 @@ If `/dev/ttyUSB0` gives "permission denied", check that you're in the
 ```
 
 The hardware-free code has unit tests in `src/test/`: `gfx` and the touch
-mapping, in C++ with Unity (from ESP-IDF), and the PNG converter in Python.
+mapping, the simulation framework and each simulation, in C++ with Unity (from ESP-IDF), and the PNG converter in Python.
 They build and run in the container's `test` stage. A cached result means
 nothing in `src/` has changed since they last passed.
 
 ## Running cydium
 
-The main image shows a test scene: a gradient and grid on the background
-layer, with bouncing balls on the foreground layer. Only the 16-row chunks
-the balls touch are sent to the panel. Tapping the screen away from the menu
-icon moves the red ball to the tap. Every 5 seconds the serial log shows
+The main image runs one simulation at a time, chosen on the menu's
+Simulation page and restored at boot:
+
+- **Bounce** (renderer test): a gradient and grid on the background layer,
+  with bouncing balls on the foreground layer. Only the 16-row chunks the
+  balls touch are sent to the panel. A tap moves the red ball there.
+- **Starfield:** stars drifting past in three parallax layers. A tap toggles
+  warp speed.
+
+Taps away from the menu icon go to the simulation. Every 5 seconds the serial log shows
 `N fps, N chunks/frame, heap free=… largest=…`, and each tap is logged with
 its raw and screen coordinates.
 
@@ -175,6 +182,8 @@ its raw and screen coordinates.
 Tap the menu icon (top left by default) to open the menu over the dimmed
 scene:
 
+- **Simulation:** the simulations, with the running one highlighted. Tap one
+  to switch to it; the menu closes.
 - **About:** the product name (`CONFIG_CYD_PRODUCT_NAME`, default `cydium`)
   and the version.
 - **Settings > Display:**
@@ -304,7 +313,7 @@ src/                  the ESP-IDF project (the only thing the build sees)
   CMakeLists.txt
   partitions.csv
   sdkconfig.defaults
-  main/               app_main.cpp (init order, tasks, test scene)
+  main/               app_main.cpp (init order, tasks, simulation list)
   apps/
     diagnostic/       diagnostic image (./build.sh --target diagnostic)
   components/
@@ -314,11 +323,14 @@ src/                  the ESP-IDF project (the only thing the build sees)
                       palette, dirty chunks, overlays)
     gfx/              hardware-free: layers, canvases, palette, 8x8 font
     settings/         bool/enum settings registry saved in NVS
+    sim/              hardware-free: Simulation interface, Manager, Surface,
+                      Rng
+    sims/             one component per simulation (bounce, starfield)
     touch/            bit-banged XPT2046, Kconfig calibration
     ui/               menu overlay, icon PNG and converter
   test/               host unit tests (./build.sh --test)
 ```
 
-Further components (`storage`, `sim`, `sims/*`, …) arrive in
+Further components (`storage`, `timesync`, …) arrive in
 `src/components/` in later phases, as described in PLAN.md (whose paths are
 relative to `src/`).

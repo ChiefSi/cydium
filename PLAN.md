@@ -1,7 +1,9 @@
 # Project Plan: Multi-Simulation Display for the CYD
 
-Status (2026-11-20): Phases 1 and 2 are done, and Phase 4 has started (the
-menu with About and display settings). Deviations from this plan so far:
+Status (2026-11-20): Phases 1 and 2 are done. Phase 3 has started (the
+`sim` framework with two demo scenes, Bounce and Starfield, chosen from the
+menu) and so has Phase 4 (the menu with Simulation, About and display
+settings). Deviations from this plan so far:
 
 - **Orientation:** landscape (320×240) is supported as well as portrait, as a
   menu setting. Layers keep the same 4 strips and are just reinterpreted.
@@ -9,6 +11,11 @@ menu with About and display settings). Deviations from this plan so far:
   `/fs/settings.json`. Defaults come from Kconfig.
 - **Touch calibration:** Kconfig values (tuned with the diagnostic image)
   instead of the 3-point calibration screen, for now.
+- **Simulation interface:** trimmed for now. Simulations draw through a
+  `sim::Surface` (layers, palette, invalidation) rather than the renderer,
+  with a seedable `sim::Rng` instead of `esp_random()`, so they run in host
+  tests. `update`/`render` are one `step(ctx, dt_ms)`; `begin` also runs
+  again after an orientation change; events and `onHold` come with Phase 5.
 - **Overlays:** the menu draws straight into the output chunks (a renderer
   `Overlay`), so it needs no third layer.
 

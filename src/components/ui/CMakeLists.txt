@@ -2,7 +2,7 @@ idf_component_register(
     SRCS "menu.cpp"
     INCLUDE_DIRS "include"
     REQUIRES display gfx
-    PRIV_REQUIRES settings buildinfo)
+    PRIV_REQUIRES settings buildinfo sim)
 
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     # Convert the menu icon PNG to a header at build time.

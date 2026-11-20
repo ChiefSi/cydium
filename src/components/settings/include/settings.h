@@ -20,6 +20,7 @@ enum class Id : uint8_t
   kInvert,        // bool: invert display colours
   kOrientation,   // enum: Orientation
   kIconPosition,  // enum: Corner
+  kSimulation,    // index of the active simulation (not in a settings group)
   kCount,
 };
 
@@ -42,10 +43,10 @@ enum Corner : uint8_t
 struct Info
 {
   const char* key;    // NVS key (at most 15 characters)
-  const char* group;  // menu group, e.g. "Display"
+  const char* group;  // menu group, e.g. "Display"; nullptr hides it from Settings
   const char* label;  // menu label
   Type type;
-  const char* const* options;  // enum option labels
+  const char* const* options;  // enum option labels; nullptr if not shown
   uint8_t option_count;        // 2 for bool
   uint8_t default_value;
 };

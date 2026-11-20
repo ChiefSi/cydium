@@ -2,6 +2,7 @@
 
 void run_gfx_tests();
 void run_touch_map_tests();
+void run_sim_tests();
 
 void setUp() {}
 void tearDown() {}
@@ -11,5 +12,6 @@ int main()
   UNITY_BEGIN();
   run_gfx_tests();
   run_touch_map_tests();
+  run_sim_tests();
   return UNITY_END();
 }

@@ -44,6 +44,9 @@ constexpr Info kInfo[kCount] = {
     {"disp.orient", "Display", "Orientation", Type::kEnum, kOrientationOptions, 2,
      kOrientationDefault},
     {"ui.icon_pos", "Display", "Menu icon", Type::kEnum, kCornerOptions, 4, kCornerDefault},
+    // Chosen on the menu's Simulation page; an index past the registered
+    // simulations falls back to the first one.
+    {"sim.active", nullptr, "Simulation", Type::kEnum, nullptr, 255, 0},
 };
 
 uint8_t s_values[kCount] = {};

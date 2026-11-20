@@ -7,17 +7,24 @@
 #include "gfx/rect.h"
 #include "renderer.h"
 
+namespace sim
+{
+class Manager;
+}
+
 namespace ui
 {
 
 // The on-screen menu: a hamburger icon in one corner that opens a panel with
-// About and Settings pages. Drawn as a renderer Overlay, straight into the
+// Simulation, Settings and About pages. Drawn as a renderer Overlay, straight into the
 // output chunks, so it needs no layer memory of its own.
 class Menu : public display::Overlay
 {
  public:
-  // Call after renderer.begin() and settings::init().
-  void begin(display::Renderer& renderer);
+  // Call after renderer.begin() and settings::init(). The Simulation page
+  // lists the simulations in sims; choosing one sets settings::Id::kSimulation
+  // (the settings listener switches to it) and closes the menu.
+  void begin(display::Renderer& renderer, const sim::Manager& sims);
 
   // Recomputes the layout for the current display size and icon position
   // setting, and repaints. Call after the orientation or icon setting changes.
@@ -42,6 +49,7 @@ class Menu : public display::Overlay
   {
     kClosed,
     kRoot,
+    kSimulation,
     kAbout,
     kSettings,
     kGroup,  // the settings in group_
@@ -54,6 +62,7 @@ class Menu : public display::Overlay
     kPage,     // arg: Page
     kGroup,    // arg: group index
     kSetting,  // arg: settings::Id
+    kSim,      // arg: simulation index
   };
 
   struct Item
@@ -70,6 +79,7 @@ class Menu : public display::Overlay
   void close();
   void build_items();
   void add_item(Kind kind, int arg, const gfx::Rect& rect);
+  static const char* page_label(Page page);
   const char* title() const;
   void draw_icon(gfx::ChunkCanvas& c);
   void draw_panel(gfx::ChunkCanvas& c);
@@ -77,6 +87,7 @@ class Menu : public display::Overlay
   void draw_item(gfx::ChunkCanvas& c, const Item& item);
 
   display::Renderer* renderer_ = nullptr;
+  const sim::Manager* sims_ = nullptr;
   Page page_ = Page::kClosed;
   int group_ = 0;
   uint32_t last_tap_ms_ = 0;

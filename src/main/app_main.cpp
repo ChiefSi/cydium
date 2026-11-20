@@ -1,13 +1,12 @@
-// cydium: renderer test scene with the settings menu.
+// cydium: runs the selected simulation with the menu on top.
 //
-// The scene draws a gradient and grid on the background layer and bouncing
-// balls on the foreground layer; only the chunks the balls touch are resent.
-// The menu icon opens About and Settings; tapping elsewhere moves the first
-// ball to the tap. Frame rate and heap are logged every 5 seconds.
+// The menu icon opens the Simulation, Settings and About pages; taps elsewhere
+// go to the simulation. Frame rate and heap are logged every 5 seconds.
 
 #include <cinttypes>
 
 #include "board.h"
+#include "bounce.h"
 #include "buildinfo.h"
 #include "display.h"
 #include "esp_heap_caps.h"
@@ -21,6 +20,8 @@
 #include "menu.h"
 #include "renderer.h"
 #include "settings.h"
+#include "sim.h"
+#include "starfield.h"
 #include "touch.h"
 
 namespace
@@ -29,118 +30,54 @@ namespace
 constexpr const char* kTag = "app";
 constexpr int kFrameMs = 33;  // ~30 fps target
 
-// Palette layout.
-constexpr uint8_t kGradientFirst = 1;  // 1..32: background gradient
-constexpr int kGradientCount = 32;
-constexpr uint8_t kGrid = 40;
-constexpr uint8_t kBallFirst = 48;  // 48..: ball colours
-constexpr int kNumBalls = 5;
-constexpr int kBallRadius = 12;
-
 display::Renderer s_renderer;
 ui::Menu s_menu;
 QueueHandle_t s_taps = nullptr;
 
-struct Ball
-{
-  int x, y;    // centre, in pixels
-  int vx, vy;  // pixels per frame
-  uint8_t colour;
-};
-
-class TestScene
+// Lets simulations draw through the renderer.
+class RendererSurface : public sim::Surface
 {
  public:
-  void setup_palette(gfx::Palette& p)
+  explicit RendererSurface(display::Renderer& r) : r_(r) {}
+  gfx::IndexedLayer& bg() override
   {
-    p.set(0, 0, 0, 0);
-    for (int i = 0; i < kGradientCount; ++i)
-      p.set(kGradientFirst + i, 8, 16 + i * 3, 40 + i * 4);
-    p.set(kGrid, 40, 70, 110);
-    const uint8_t rgb[kNumBalls][3] = {
-        {255, 80, 80}, {80, 220, 120}, {90, 150, 255}, {255, 210, 70}, {230, 110, 255}};
-    for (int i = 0; i < kNumBalls; ++i)
-      p.set(kBallFirst + i, rgb[i][0], rgb[i][1], rgb[i][2]);
+    return r_.bg();
   }
-
-  // (Re)draws the background and restarts the balls for the current size.
-  void reset(display::Renderer& r)
+  gfx::IndexedLayer& fg() override
   {
-    const int w = r.bg().width();
-    const int h = r.bg().height();
-    gfx::Canvas bg(r.bg());
-    for (int y = 0; y < h; ++y)
-      bg.hline(0, y, w, static_cast<uint8_t>(kGradientFirst + y * kGradientCount / h));
-    for (int x = 0; x < w; x += 40)
-      bg.vline(x, 0, h, kGrid);
-    for (int y = 0; y < h; y += 40)
-      bg.hline(0, y, w, kGrid);
-
-    r.fg().clear(0);
-    for (int i = 0; i < kNumBalls; ++i)
-    {
-      Ball& b = balls_[i];
-      b.x = kBallRadius + static_cast<int>(esp_random() % (w - 2 * kBallRadius));
-      b.y = kBallRadius + static_cast<int>(esp_random() % (h - 2 * kBallRadius));
-      b.vx = (esp_random() & 1) ? 2 + i % 3 : -(2 + i % 3);
-      b.vy = (esp_random() & 1) ? 1 + i % 4 : -(1 + i % 4);
-      b.colour = static_cast<uint8_t>(kBallFirst + i);
-    }
-    draw(r);
-    r.invalidate_all();
+    return r_.fg();
   }
-
-  void step(display::Renderer& r)
+  gfx::Palette& palette() override
   {
-    gfx::Canvas fg(r.fg());
-    const int w = r.fg().width();
-    const int h = r.fg().height();
-    for (auto& b : balls_)
-    {
-      fg.fill_rect(bounds(b), 0);
-      r.invalidate(bounds(b));
-      b.x += b.vx;
-      b.y += b.vy;
-      if (b.x < kBallRadius || b.x >= w - kBallRadius)
-      {
-        b.vx = -b.vx;
-        b.x = b.x < kBallRadius ? kBallRadius : w - kBallRadius - 1;
-      }
-      if (b.y < kBallRadius || b.y >= h - kBallRadius)
-      {
-        b.vy = -b.vy;
-        b.y = b.y < kBallRadius ? kBallRadius : h - kBallRadius - 1;
-      }
-    }
-    draw(r);
+    return r_.palette();
   }
-
-  void move_first_ball(int x, int y)
+  void invalidate(const gfx::Rect& r) override
   {
-    balls_[0].x = x;
-    balls_[0].y = y;
+    r_.invalidate(r);
+  }
+  void invalidate_all() override
+  {
+    r_.invalidate_all();
   }
 
  private:
-  static gfx::Rect bounds(const Ball& b)
-  {
-    return {b.x - kBallRadius, b.y - kBallRadius, 2 * kBallRadius + 1, 2 * kBallRadius + 1};
-  }
-
-  void draw(display::Renderer& r)
-  {
-    gfx::Canvas fg(r.fg());
-    for (const auto& b : balls_)
-    {
-      fg.fill_circle(b.x, b.y, kBallRadius, b.colour);
-      r.invalidate(bounds(b));
-    }
-  }
-
-  Ball balls_[kNumBalls] = {};
+  display::Renderer& r_;
 };
 
-TestScene s_scene;
+RendererSurface s_surface(s_renderer);
+sim::Manager s_sims(s_surface);
+
+// The registered simulations, in menu order.
+bounce::Bounce s_bounce;
+starfield::Starfield s_starfield;
+
+void select_simulation(int index)
+{
+  if (!s_sims.select(index))
+    ESP_LOGE(kTag, "simulation %d failed to start", index);
+  else
+    ESP_LOGI(kTag, "simulation: %s", s_sims.at(s_sims.active()).name());
+}
 
 gfx::Orientation orientation_from_setting()
 {
@@ -153,7 +90,7 @@ void apply_orientation()
 {
   display::set_orientation(orientation_from_setting());
   s_renderer.resize();
-  s_scene.reset(s_renderer);
+  s_sims.restart();
   s_menu.relayout();
 }
 
@@ -169,6 +106,9 @@ void on_setting_changed(settings::Id id, uint8_t value, void*)
       break;
     case settings::Id::kIconPosition:
       s_menu.relayout();
+      break;
+    case settings::Id::kSimulation:
+      select_simulation(value);
       break;
     default:
       break;
@@ -217,9 +157,11 @@ extern "C" void app_main()
   display::set_orientation(orientation_from_setting());
 
   ESP_ERROR_CHECK(s_renderer.begin());
-  s_scene.setup_palette(s_renderer.palette());
-  s_scene.reset(s_renderer);
-  s_menu.begin(s_renderer);
+  s_sims.seed(esp_random());
+  s_sims.add(s_bounce);
+  s_sims.add(s_starfield);
+  select_simulation(settings::get(settings::Id::kSimulation));
+  s_menu.begin(s_renderer, s_sims);
   settings::set_listener(on_setting_changed, nullptr);
   s_renderer.present();
   board::set_backlight(255);
@@ -232,6 +174,7 @@ extern "C" void app_main()
   int chunks = 0;
   int64_t next_log_us = esp_timer_get_time() + 5000 * 1000;
   TickType_t wake = xTaskGetTickCount();
+  uint32_t last_ms = now_ms();
   for (;;)
   {
     touch::RawSample s;
@@ -240,11 +183,13 @@ extern "C" void app_main()
       const touch::Point p = touch::to_screen(s, display::orientation());
       ESP_LOGI(kTag, "tap raw=(%u,%u) screen=(%d,%d)", s.x, s.y, p.x, p.y);
       if (!s_menu.tap(p.x, p.y, now_ms()))
-        s_scene.move_first_ball(p.x, p.y);
+        s_sims.tap(p.x, p.y);
     }
-    s_menu.tick(now_ms());
+    const uint32_t ms = now_ms();
+    s_menu.tick(ms);
 
-    s_scene.step(s_renderer);
+    s_sims.step(ms - last_ms);
+    last_ms = ms;
     chunks += s_renderer.present();
     ++frames;
 
