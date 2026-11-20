@@ -1,4 +1,5 @@
-# Host unit tests for the hardware-free code (gfx, touch mapping). Built and
+# Host unit tests for the hardware-free code (gfx, touch mapping, sim and
+# sims). Built and
 # run in the container by `./build.sh --test`; uses Unity from ESP-IDF.
 cmake_minimum_required(VERSION 3.16)
 project(cydium_host_tests C CXX)
@@ -19,11 +20,18 @@ add_executable(host_tests
     test_main.cpp
     test_gfx.cpp
     test_touch_map.cpp
+    test_sim.cpp
     "${components}/gfx/font8x8.cpp"
-    "${components}/gfx/layer.cpp")
+    "${components}/gfx/layer.cpp"
+    "${components}/sim/manager.cpp"
+    "${components}/sims/bounce/bounce.cpp"
+    "${components}/sims/starfield/starfield.cpp")
 target_include_directories(host_tests PRIVATE
     "${components}/gfx/include"
-    "${components}/touch/include")
+    "${components}/touch/include"
+    "${components}/sim/include"
+    "${components}/sims/bounce/include"
+    "${components}/sims/starfield/include")
 target_compile_options(host_tests PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(host_tests PRIVATE unity)
 

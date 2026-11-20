@@ -7,6 +7,7 @@
 #include "menu_icon.h"
 #include "sdkconfig.h"
 #include "settings.h"
+#include "sim/manager.h"
 
 namespace ui
 {
@@ -26,6 +27,7 @@ constexpr int kTitleH = 36;   // title bar; also the Back and Close buttons' siz
 constexpr int kPad = 8;       // inner padding
 constexpr int kNavRowH = 40;  // category rows
 constexpr int kSetRowH = 48;  // setting rows: label line + value line
+constexpr int kSimRowH = 38;  // simulation rows: name + description
 constexpr int kBox = 20;      // checkbox size
 
 constexpr uint16_t kPanelBg = gfx::rgb565_be(20, 24, 36);
@@ -73,13 +75,16 @@ int wrap(const char* s, int cols, char (*lines)[48], int max_lines)
 
 }  // namespace
 
-void Menu::begin(display::Renderer& renderer)
+void Menu::begin(display::Renderer& renderer, const sim::Manager& sims)
 {
   renderer_ = &renderer;
+  sims_ = &sims;
   group_count_ = 0;
   for (int i = 0; i < settings::kCount; ++i)
   {
     const char* g = settings::info(static_cast<settings::Id>(i)).group;
+    if (!g)
+      continue;  // not shown on the Settings page
     bool seen = false;
     for (int j = 0; j < group_count_; ++j)
       seen = seen || std::strcmp(groups_[j], g) == 0;
@@ -157,8 +162,14 @@ void Menu::build_items()
   switch (page_)
   {
     case Page::kRoot:
-      row(Kind::kPage, static_cast<int>(Page::kAbout), kNavRowH);
+      row(Kind::kPage, static_cast<int>(Page::kSimulation), kNavRowH);
       row(Kind::kPage, static_cast<int>(Page::kSettings), kNavRowH);
+      row(Kind::kPage, static_cast<int>(Page::kAbout), kNavRowH);
+      break;
+    case Page::kSimulation:
+      // TODO: page or scroll once there are more simulations than fit.
+      for (int i = 0; i < sims_->count(); ++i)
+        row(Kind::kSim, i, kSimRowH);
       break;
     case Page::kSettings:
       for (int g = 0; g < group_count_; ++g)
@@ -166,11 +177,27 @@ void Menu::build_items()
       break;
     case Page::kGroup:
       for (int i = 0; i < settings::kCount; ++i)
-        if (std::strcmp(settings::info(static_cast<settings::Id>(i)).group, groups_[group_]) == 0)
+      {
+        const char* g = settings::info(static_cast<settings::Id>(i)).group;
+        if (g && std::strcmp(g, groups_[group_]) == 0)
           row(Kind::kSetting, i, kSetRowH);
+      }
       break;
     default:
       break;
+  }
+}
+
+const char* Menu::page_label(Page page)
+{
+  switch (page)
+  {
+    case Page::kSimulation:
+      return "Simulation";
+    case Page::kAbout:
+      return "About";
+    default:
+      return "Settings";
   }
 }
 
@@ -178,10 +205,10 @@ const char* Menu::title() const
 {
   switch (page_)
   {
+    case Page::kSimulation:
     case Page::kAbout:
-      return "About";
     case Page::kSettings:
-      return "Settings";
+      return page_label(page_);
     case Page::kGroup:
       return groups_[group_];
     default:
@@ -234,6 +261,11 @@ bool Menu::tap(int x, int y, uint32_t now_ms)
         renderer_->invalidate(panel_);
         break;
       }
+      case Kind::kSim:
+        // The settings listener switches simulation; close to show it.
+        settings::set(settings::Id::kSimulation, static_cast<uint8_t>(it.arg));
+        close();
+        break;
     }
     return true;
   }
@@ -319,11 +351,23 @@ void Menu::draw_item(gfx::ChunkCanvas& c, const Item& item)
   const int inner_w = r.w - 2 * kPad;
   c.hline(r.x + kPad, r.bottom() - 1, r.w - 2 * kPad, kSeparator);
 
+  if (item.kind == Kind::kSim)
+  {
+    const sim::Simulation& s = sims_->at(item.arg);
+    const bool active = item.arg == sims_->active();
+    if (active)
+      c.fill_rect({r.x + 2, r.y + 4, 3, r.h - 8}, kAccent);
+    c.text(x, r.y + 4, s.name(), active ? kAccent : kText, fit_scale(s.name(), inner_w));
+    char line[1][48];
+    if (wrap(s.description(), inner_w / 8, line, 1) == 1)
+      c.text(x, r.y + 24, line[0], kMuted, 1);
+    return;
+  }
+
   if (item.kind == Kind::kPage || item.kind == Kind::kGroup)
   {
-    const char* label = item.kind == Kind::kGroup                     ? groups_[item.arg]
-                        : static_cast<Page>(item.arg) == Page::kAbout ? "About"
-                                                                      : "Settings";
+    const char* label =
+        item.kind == Kind::kGroup ? groups_[item.arg] : page_label(static_cast<Page>(item.arg));
     const int ty = r.y + (r.h - 16) / 2;
     c.text(x, ty, label, kText, 2);
     c.text(r.right() - kPad, ty, ">", kMuted, 2, Align::kRight);
