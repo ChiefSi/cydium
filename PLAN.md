@@ -1,7 +1,16 @@
 # Project Plan: Multi-Simulation Display for the CYD
 
-Status: proposed (2026-11-20). A starting point for a new project; nothing is
-implemented yet.
+Status (2026-11-20): Phases 1 and 2 are done, and Phase 4 has started (the
+menu with About and display settings). Deviations from this plan so far:
+
+- **Orientation:** landscape (320×240) is supported as well as portrait, as a
+  menu setting. Layers keep the same 4 strips and are just reinterpreted.
+- **Settings:** stored as single bytes in NVS for now, not
+  `/fs/settings.json`. Defaults come from Kconfig.
+- **Touch calibration:** Kconfig values (tuned with the diagnostic image)
+  instead of the 3-point calibration screen, for now.
+- **Overlays:** the menu draws straight into the output chunks (a renderer
+  `Overlay`), so it needs no third layer.
 
 ## Overview
 
@@ -29,7 +38,8 @@ microSD card for editable settings and extra assets.
 3. **Simulation-specific events** that:
    - occur at random;
    - can be triggered manually with a button.
-4. **Maximise pixel count.** Render at the panel's native 240×320. A 256-colour
+4. **Maximise pixel count.** Render at the panel's native 240×320 (or 320×240
+   in landscape). A 256-colour
    palette per simulation is acceptable for pixel art.
 5. **Use the microSD slot** for editable settings, saved state and optional
    assets. Everything must still work without a card.

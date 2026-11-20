@@ -13,7 +13,12 @@ paths are relative to `src/`. `README.md` covers setup, build and flashing.
   other names are extra ESP-IDF projects in `src/apps/NAME/` that share
   `src/components/` and `src/sdkconfig.defaults` (e.g. `diagnostic`).
 - Only `src/` is in the build context. Everything outside it (README,
-  `build/`, scripts) must never affect the firmware build.
+  `build/`, scripts) must never affect the firmware build. The one exception
+  is the version: `build.sh` passes `git describe` (plus `-dirty`)
+  in as the `CYD_GIT_DESCRIBE` build argument, read by `buildinfo`.
+- Run the host unit tests with `./build.sh --test` (`--no-build` to skip the
+  firmware). They live in `src/test/` and cover the hardware-free code; add
+  tests there when changing `gfx`, `touch_map.h` or the PNG converter.
 - Hardware behaviour (display, touch, timing, colours) can only be checked by
   the user flashing the board. When finishing a change, say what still needs
   checking on the board.
@@ -24,7 +29,7 @@ paths are relative to `src/`. `README.md` covers setup, build and flashing.
   `clang-format -i` (`.venv/bin/pip install clang-format` if missing).
 - One component per directory in `src/components/`, one C++ `namespace` per
   component, `kConstant` naming, `REQUIRES` kept minimal.
-- `gfx`, `sim` and `sims/*` must stay hardware-free (no IDF driver or
+- `gfx`, `buildinfo`, `touch_map.h`, `sim` and `sims/*` must stay hardware-free (no IDF driver or
   `esp_lcd` headers) so they build and run unit tests on the host.
 - Memory: no PSRAM. No single allocation above ~100 KB, and none in the
   render loop. Allocate at `begin()` or boot, never per frame.

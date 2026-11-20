@@ -4,9 +4,11 @@ Ambient pixel-art simulations for the ESP32-2432S028R ("Cheap Yellow
 Display"), written in C++ on plain ESP-IDF. See [PLAN.md](PLAN.md) for the
 design and roadmap.
 
-**Status:** Phase 1 (skeleton): board bring-up, display colour test with
-runtime inversion, raw touch logging, and a [diagnostic image](#diagnostic-image)
-for working out a board's panel settings.
+**Status:** Phase 2 (renderer) with the start of Phase 4 (menu): indexed
+layers composited to the panel in dirty 16-row chunks, a test scene, and a
+settings menu (About, plus display settings saved in NVS). A
+[diagnostic image](#diagnostic-image) helps work out a board's panel and touch
+settings.
 
 ## Dependencies
 
@@ -87,6 +89,7 @@ python3.12 -m venv .venv
 ```
 ./build.sh                      # the main image, cydium
 ./build.sh --target diagnostic  # another image, from src/apps/diagnostic/
+./build.sh --test               # run the host unit tests first
 ./build.sh --help               # all options
 ```
 
@@ -146,19 +149,81 @@ cd build/cydium
 If `/dev/ttyUSB0` gives "permission denied", check that you're in the
 `dialout` group (see [Quick start](#quick-start)).
 
-## Phase 1 bring-up checks
+## Host unit tests
 
-When flashed, the screen cycles through black, red, green, blue, white and
-grey, and the serial log shows:
+```
+./build.sh --test             # tests, then build
+./build.sh --test --no-build  # tests only
+```
 
-- `fill <colour> in N us`: full-screen push time (expect ~31 ms at 40 MHz);
-- `light=N`: the LDR reading (lower = brighter room);
-- `heap free / largest`: available heap;
-- `raw x / y / z`: touch readings while the screen is pressed.
+The hardware-free code has unit tests in `src/test/`: `gfx` and the touch
+mapping, in C++ with Unity (from ESP-IDF), and the PNG converter in Python.
+They build and run in the container's `test` stage. A cached result means
+nothing in `src/` has changed since they last passed.
 
-Press **BOOT** to toggle colour inversion. If black looks white (or the
-colours look washed out), your panel needs the opposite setting. The
-[diagnostic image](#diagnostic-image) checks all the panel settings.
+## Running cydium
+
+The main image shows a test scene: a gradient and grid on the background
+layer, with bouncing balls on the foreground layer. Only the 16-row chunks
+the balls touch are sent to the panel. Tapping the screen away from the menu
+icon moves the red ball to the tap. Every 5 seconds the serial log shows
+`N fps, N chunks/frame, heap free=… largest=…`, and each tap is logged with
+its raw and screen coordinates.
+
+### Menu
+
+Tap the menu icon (top left by default) to open the menu over the dimmed
+scene:
+
+- **About:** the product name (`CONFIG_CYD_PRODUCT_NAME`, default `cydium`)
+  and the version.
+- **Settings > Display:**
+  - **Invert colours** (checkbox);
+  - **Orientation:** Portrait or Landscape;
+  - **Menu icon:** which corner the icon sits in.
+
+Tap a checkbox to toggle it and a choice to cycle it. Changes apply at once
+and are saved in NVS, so they survive a reboot. `<` goes back, `x` (or a tap
+outside the panel) closes, and the menu closes by itself after 10 seconds
+without a touch.
+
+The defaults and the icon come from Kconfig. To change them, add the options
+to `src/sdkconfig.defaults` (shared by both images) and rebuild:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `CONFIG_CYD_MENU_ICON_SIZE` | `32` | icon width and height, in pixels |
+| `CONFIG_CYD_MENU_ICON_OFFSET` | `4` | gap between the icon and the screen edges |
+| `CONFIG_CYD_MENU_ICON_PNG` | `"icons/menu.png"` | icon image, relative to `src/components/ui/` |
+| `CONFIG_CYD_MENU_ICON_TOP_LEFT` (or `_TOP_RIGHT`, `_BOTTOM_LEFT`, `_BOTTOM_RIGHT`) | top left | default icon corner |
+| `CONFIG_CYD_MENU_TIMEOUT_S` | `10` | auto-close delay; `0` never closes |
+| `CONFIG_CYD_LCD_INVERT_DEFAULT` | off | default for Invert colours |
+| `CONFIG_CYD_DISPLAY_DEFAULT_LANDSCAPE` | off (portrait) | default orientation |
+| `CONFIG_CYD_DISPLAY_LANDSCAPE_USB_LEFT` | off (USB on the right) | which way landscape turns |
+| `CONFIG_CYD_PRODUCT_NAME` | `"cydium"` | name at the top of the About page |
+| `CONFIG_CYD_VERSION_CUSTOM` + `CONFIG_CYD_VERSION_STRING` | generated | fixed version string |
+
+The icon PNG must be inside `src/`, because the container build can see
+nothing else. It is scaled to the icon size at build time, and transparency is
+kept. Non-interlaced 8-bit greyscale, RGB, RGBA and palette PNGs are supported.
+`src/components/ui/tools/make_menu_icon.py` regenerates the default icon.
+
+The Kconfig defaults only apply until a setting is changed in the menu. To go
+back to them, erase the NVS partition:
+
+```
+.venv/bin/python -m esptool -p /dev/ttyUSB0 erase-region 0x9000 0x6000
+```
+
+### Version
+
+By default, the About page shows `<git describe>[-dirty]-<build time>`, with
+the build time in seconds since the Unix epoch (UTC), e.g.
+`7973efb-dirty-1795189980`. `build.sh` runs `git describe --tags
+--always` on the host, because the container can't see `.git`, and appends
+`-dirty` when `git status --porcelain` lists any change, including untracked
+files. Set `CONFIG_CYD_VERSION_CUSTOM=y` and `CONFIG_CYD_VERSION_STRING="…"`
+to use a fixed string instead.
 
 ## Diagnostic image
 
@@ -181,6 +246,7 @@ red, green and blue, and the serial log names the colour of each one. Press
 | Numbers mirrored left to right, or block 0 at the top right | `CONFIG_CYD_LCD_MIRROR_X` |
 | Numbers upside down, or block 0 at the bottom | `CONFIG_CYD_LCD_MIRROR_Y` |
 | Blocks logged as red look blue, and vice versa | `CONFIG_CYD_LCD_BGR` |
+| The crosshair isn't under the stylus | `CONFIG_CYD_TOUCH_*` (see below) |
 | Black background looks white; inverting with BOOT fixes it | `CONFIG_CYD_LCD_INVERT_DEFAULT` |
 
 The defaults are `SWAP_XY`, `MIRROR_X` and `MIRROR_Y` on, `BGR` and
@@ -189,6 +255,40 @@ The defaults are `SWAP_XY`, `MIRROR_X` and `MIRROR_Y` on, `BGR` and
 to turn it off, or `CONFIG_CYD_LCD_BGR=y` to turn it on). Then rebuild both
 images, because the diagnostic image also reads that file. At boot, the log
 also shows the LCD controller's ID registers (`display: probe: reg …`).
+
+### Touch calibration
+
+The diagnostic image starts by calibrating touch. It shows four yellow
+targets, one at a time, 20 px in from each corner, and you tap each one
+(holding briefly is fine; the reading is averaged). It then fits a calibration
+and prints it as Kconfig lines:
+
+```
+CONFIG_CYD_TOUCH_X_MIN=…
+CONFIG_CYD_TOUCH_X_MAX=…
+…
+```
+
+The block test then uses the new calibration, so you can check that each
+press's white crosshair lands under the stylus. While the screen is held, the
+log shows `raw x=… y=… -> screen x=… y=…`. To make the calibration permanent,
+paste the printed lines into `src/sdkconfig.defaults` and rebuild. Both images
+read that file.
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `CONFIG_CYD_TOUCH_X_MIN`, `_X_MAX` | `261`, `3843` | raw X at its two ends |
+| `CONFIG_CYD_TOUCH_Y_MIN`, `_Y_MAX` | `196`, `3847` | raw Y at its two ends |
+| `CONFIG_CYD_TOUCH_SWAP_XY` | off | raw X runs along the long (320 px) edge |
+| `CONFIG_CYD_TOUCH_FLIP_X` | on | screen x is mirrored (raw X falls left to right) |
+| `CONFIG_CYD_TOUCH_FLIP_Y` | off | screen y is mirrored |
+
+The defaults come from running the calibration on the board this was
+developed on: in portrait, raw X falls from left to right and raw Y rises from
+top to bottom. Other boards may differ, so run the calibration if touches land
+in the wrong place.
+
+The calibration is for portrait; landscape is worked out from it.
 
 ## Layout
 
@@ -204,15 +304,21 @@ src/                  the ESP-IDF project (the only thing the build sees)
   CMakeLists.txt
   partitions.csv
   sdkconfig.defaults
-  main/               app_main.cpp (init order, tasks)
+  main/               app_main.cpp (init order, tasks, test scene)
   apps/
     diagnostic/       diagnostic image (./build.sh --target diagnostic)
   components/
     board/            pin map, backlight PWM, BOOT button, light sensor
-    display/          esp_lcd ILI9341 setup, DMA chunk buffers
-    touch/            bit-banged XPT2046
+    buildinfo/        product name and version (Kconfig or git describe + time)
+    display/          esp_lcd ILI9341 setup, orientation, Renderer (layers,
+                      palette, dirty chunks, overlays)
+    gfx/              hardware-free: layers, canvases, palette, 8x8 font
+    settings/         bool/enum settings registry saved in NVS
+    touch/            bit-banged XPT2046, Kconfig calibration
+    ui/               menu overlay, icon PNG and converter
+  test/               host unit tests (./build.sh --test)
 ```
 
-Further components (`gfx`, `storage`, `settings`, `sim`, `ui`, `sims/*`, …)
-arrive in `src/components/` in later phases, as described in PLAN.md (whose
-paths are relative to `src/`).
+Further components (`storage`, `sim`, `sims/*`, …) arrive in
+`src/components/` in later phases, as described in PLAN.md (whose paths are
+relative to `src/`).
