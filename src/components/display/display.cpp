@@ -90,7 +90,7 @@ esp_err_t init()
   io.lcd_cmd_bits = 8;
   io.lcd_param_bits = 8;
   ESP_ERROR_CHECK(
-      esp_lcd_new_panel_io_spi(reinterpret_cast<esp_lcd_spi_bus_handle_t>(kHost), &io, &s_io));
+      esp_lcd_new_panel_io_spi(static_cast<esp_lcd_spi_bus_handle_t>(kHost), &io, &s_io));
 
   esp_lcd_panel_dev_config_t dev = {};
   dev.reset_gpio_num = board::pins::kTftRst;
