@@ -9,7 +9,7 @@ and of Phase 4 (menu): indexed layers composited to the panel in dirty 16-row
 chunks, two demo simulations chosen from the menu, and display settings
 saved in NVS. A
 [diagnostic image](#diagnostic-image) helps work out a board's panel and touch
-settings.
+settings, and an [emulator](#emulator) runs the image on a PC.
 
 ## Dependencies
 
@@ -22,6 +22,7 @@ installed on the host. The host needs:
 | Podman or Docker CE, installed and runnable by your user | building (`./build.sh`) |
 | Python ≥ 3.10 and esptool (in `.venv/`) | flashing and the serial console |
 | `dialout` group membership | access to `/dev/ttyUSB0` |
+| a web browser | the [emulator](#emulator) |
 
 `build.sh` uses whichever container engine is installed. If both are, set
 `CONTAINER_ENGINE=docker` or `CONTAINER_ENGINE=podman` to choose.
@@ -88,7 +89,8 @@ python3.12 -m venv .venv
 ## Build
 
 ```
-./build.sh                      # the main image, cydium
+./build.sh                      # the main image, cydium, and its emulator
+./build.sh --no-build-emulator  # just the main image
 ./build.sh --target diagnostic  # another image, from src/apps/diagnostic/
 ./build.sh --test               # run the host unit tests first
 ./build.sh --help               # all options
@@ -98,7 +100,7 @@ python3.12 -m venv .venv
 `cydium` (the default) is the project in `src/`, and any other name is the
 project in `src/apps/<name>/`. Each target builds into `build/<target>/`.
 
-This builds `Containerfile` in three stages:
+This builds `Containerfile` in these stages:
 
 1. **deps**: Ubuntu packages, the ESP-IDF source and its toolchain. This is
    cached, so it only reruns when the `Containerfile` or `IDF_VERSION`
@@ -111,6 +113,9 @@ This builds `Containerfile` in three stages:
 3. **artifacts**: exported to `build/<target>/`: `<target>.bin`, `.elf`, `.map`,
    bootloader, partition table, `flash_args`, the resolved `sdkconfig` and
    `dependencies.lock`. The files are owned by your user.
+4. **emulator** (cydium target only, skipped with `--no-build-emulator`):
+   the same `src/` built for ESP-IDF's `linux` target, exported to
+   `build/cydium/emulator/cydium-emulator`. See [Emulator](#emulator).
 
 The toolchain is ESP-IDF **v6.1.1**, pinned by `IDF_VERSION` in
 `Containerfile`. Managed components are declared in `src/main/idf_component.yml`
@@ -234,6 +239,44 @@ the build time in seconds since the Unix epoch (UTC), e.g.
 files. Set `CONFIG_CYD_VERSION_CUSTOM=y` and `CONFIG_CYD_VERSION_STRING="…"`
 to use a fixed string instead.
 
+## Emulator
+
+```
+./build.sh                                  # builds it alongside the firmware
+build/cydium/emulator/cydium-emulator       # then open http://127.0.0.1:8240/
+build/cydium/emulator/cydium-emulator --addr 0.0.0.0 --port 9000
+```
+
+The emulator is the cydium image (`app_main`, settings, menu, simulations)
+built for ESP-IDF's `linux` target, so it runs on FreeRTOS's POSIX port as a
+normal program. Only the hardware is swapped out:
+
+- **Display:** the screen is shown on a local web page. Rotation, colour
+  inversion and the backlight work as on the board.
+- **Touch:** press the mouse on the screen. The press is turned into the raw
+  XPT2046 reading the Kconfig calibration expects there, so it goes through
+  the same mapping as a real touch.
+- **BOOT button:** the button under the screen, or hold the `B` key.
+- **Flash:** NVS settings are kept in
+  `~/.local/state/cydium/emulator-flash.bin` (or `$XDG_STATE_HOME/cydium/`),
+  so they survive restarts. Delete the file to reset them.
+
+It is statically linked, so it runs on hosts with an older C library than
+the build container's (such as EL9), and needs nothing else installed. Stop
+it with Ctrl+C. Under WSL2, open the address in a Windows browser.
+
+| Option | Environment variable | Default | |
+| --- | --- | --- | --- |
+| `-a`, `--addr ADDR` | `CYD_EMULATOR_ADDR` | `127.0.0.1` | IPv4 address to listen on; `0.0.0.0` exposes it to the network |
+| `-p`, `--port PORT` | `CYD_EMULATOR_PORT` | `8240` | port for the web page |
+| | `CYD_EMULATOR_FLASH` | see above | flash image file |
+
+Options override the environment. `--help` lists them.
+
+The emulator isn't timing-accurate: frame rate and SPI bandwidth are
+whatever the PC manages, and the heap figures in the log are meaningless.
+Check display, touch and timing behaviour on the board.
+
 ## Diagnostic image
 
 CYD boards differ between batches in panel orientation, red/blue order and
@@ -321,6 +364,9 @@ src/                  the ESP-IDF project (the only thing the build sees)
     buildinfo/        product name and version (Kconfig or git describe + time)
     display/          esp_lcd ILI9341 setup, orientation, Renderer (layers,
                       palette, dirty chunks, overlays)
+    emulator/         linux target only: web page for the screen, mouse as
+                      touch, flash file (board, display and touch have
+                      *_linux.cpp variants that use it)
     gfx/              hardware-free: layers, canvases, palette, 8x8 font
     settings/         bool/enum settings registry saved in NVS
     sim/              hardware-free: Simulation interface, Manager, Surface,

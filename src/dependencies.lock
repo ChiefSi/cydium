@@ -41,6 +41,6 @@ direct_dependencies:
 - espressif/esp_lcd_ili9341
 - idf
 - joltwallet/littlefs
-manifest_hash: 32ccbb323c20073fb6fa464b7fcfd6add93d66a85a69f4a0d4dafdc8e40d7b1a
+manifest_hash: 6ee900aa561d6ffabefe6e8a25331f2dd6edbed2cfb414a7a6356b562cd85d4f
 target: esp32
 version: 3.0.0

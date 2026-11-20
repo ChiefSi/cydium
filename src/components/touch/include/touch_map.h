@@ -72,6 +72,44 @@ constexpr Point rotate_from_portrait(Point p, gfx::Orientation o)
   }
 }
 
+// Pixel in orientation o -> portrait pixel (inverse of rotate_from_portrait).
+constexpr Point rotate_to_portrait(Point p, gfx::Orientation o)
+{
+  switch (o)
+  {
+    case gfx::Orientation::kLandscapeCw:
+      return {p.y, static_cast<int16_t>(gfx::kPortraitHeight - 1 - p.x)};
+    case gfx::Orientation::kLandscapeCcw:
+      return {static_cast<int16_t>(gfx::kPortraitWidth - 1 - p.y), p.x};
+    case gfx::Orientation::kPortrait:
+    default:
+      return p;
+  }
+}
+
+struct RawPoint
+{
+  uint16_t x;
+  uint16_t y;
+};
+
+// Portrait pixel -> the raw reading at its centre: the inverse of
+// map_to_portrait, used by the emulator to fake the controller. Exact while
+// each raw range spans at least twice the screen size in pixels.
+constexpr RawPoint map_from_portrait(Point p, const Calibration& c)
+{
+  const int x = c.flip_x ? gfx::kPortraitWidth - 1 - p.x : p.x;
+  const int y = c.flip_y ? gfx::kPortraitHeight - 1 - p.y : p.y;
+  auto unscale = [](int v, int lo, int hi, int size)
+  { return static_cast<uint16_t>(lo + (2 * v + 1) * (hi - lo) / (2 * size)); };
+  // map_to_portrait scales screen x with the Y range when swapped.
+  const uint16_t a = c.swap_xy ? unscale(x, c.y_min, c.y_max, gfx::kPortraitWidth)
+                               : unscale(x, c.x_min, c.x_max, gfx::kPortraitWidth);
+  const uint16_t b = c.swap_xy ? unscale(y, c.x_min, c.x_max, gfx::kPortraitHeight)
+                               : unscale(y, c.y_min, c.y_max, gfx::kPortraitHeight);
+  return c.swap_xy ? RawPoint{b, a} : RawPoint{a, b};
+}
+
 constexpr Point map_to_screen(uint16_t raw_x, uint16_t raw_y, const Calibration& c,
                               gfx::Orientation o)
 {

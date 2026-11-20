@@ -119,6 +119,35 @@ void test_fit_calibration()
   check_fit({300, 3700, 200, 3600, true, true, true});
 }
 
+// The emulator fakes raw readings with the inverse mappings; every pixel in
+// every orientation must come back to itself.
+void test_inverse_round_trip()
+{
+  const Calibration cals[] = {
+      {261, 3843, 196, 3847, false, true, false},  // the board defaults
+      {200, 3800, 300, 3700, true, false, true},
+      {0, 4095, 0, 4095, true, true, true},
+  };
+  const Orientation orients[] = {Orientation::kPortrait, Orientation::kLandscapeCw,
+                                 Orientation::kLandscapeCcw};
+  for (const Calibration& c : cals)
+    for (Orientation o : orients)
+    {
+      const int w = gfx::screen_width(o), h = gfx::screen_height(o);
+      for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+        {
+          const Point s{static_cast<int16_t>(x), static_cast<int16_t>(y)};
+          const Point p = touch::rotate_to_portrait(s, o);
+          TEST_ASSERT_TRUE(p.x >= 0 && p.x < 240 && p.y >= 0 && p.y < 320);
+          const touch::RawPoint raw = touch::map_from_portrait(p, c);
+          const Point back = touch::map_to_screen(raw.x, raw.y, c, o);
+          if (back.x != x || back.y != y)
+            TEST_FAIL_MESSAGE("inverse mapping doesn't round-trip");
+        }
+    }
+}
+
 }  // namespace
 
 void run_touch_map_tests()
@@ -129,4 +158,5 @@ void run_touch_map_tests()
   RUN_TEST(test_rotation);
   RUN_TEST(test_board_calibration_corners);
   RUN_TEST(test_fit_calibration);
+  RUN_TEST(test_inverse_round_trip);
 }

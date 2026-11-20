@@ -2,8 +2,10 @@
 # calling this directly. Stages:
 #   deps      - OS packages, ESP-IDF source and tools (cached between builds)
 #   build     - compiles one image (APP) from src/, a read-only bind mount
+#   host      - deps plus a host C++ compiler
 #   test      - builds and runs the host unit tests in src/test
-#   artifacts - only the build outputs, exported with --output
+#   emulator  - builds the cydium image for IDF's linux target (the emulator)
+#   artifacts, emulator-artifacts - only the outputs, exported with --output
 
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu:24.04
 ARG IDF_VERSION=v6.1.1
@@ -77,14 +79,17 @@ RUN --mount=type=bind,source=src,target=/src \
  && cp -- "$proj/sdkconfig" "$proj/dependencies.lock" /out/
 
 ########################################################################
-FROM deps AS test
-# Host unit tests (src/test): gfx and touch mapping in C++ with Unity from
-# ESP-IDF, plus the PNG converter in Python. Run by ./build.sh --test.
+FROM deps AS host
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update \
  && apt-get install -y --no-install-recommends g++
 
+########################################################################
+FROM host AS test
+# Host unit tests (src/test): gfx, touch mapping and simulations in C++ with
+# Unity from ESP-IDF, plus the PNG converter in Python. Run by
+# ./build.sh --test.
 RUN --mount=type=bind,source=src,target=/src \
     export PYTHONDONTWRITEBYTECODE=1 \
  && cmake -S /src/test -B /tmp/test -G Ninja \
@@ -92,5 +97,33 @@ RUN --mount=type=bind,source=src,target=/src \
  && ctest --test-dir /tmp/test --output-on-failure
 
 ########################################################################
+FROM host AS emulator
+# The cydium image (src/) built for IDF's linux target: a static host
+# program, see src/components/emulator. The target comes from set-target, so
+# sdkconfig.defaults' CONFIG_IDF_TARGET line is dropped from the copy. IDF's
+# linux component needs libbsd; LIB_BSD points it at the static library.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update \
+ && apt-get install -y --no-install-recommends libbsd-dev
+ARG CYD_GIT_DESCRIBE=unknown
+RUN --mount=type=bind,source=src,target=/src \
+    --mount=type=cache,target=/root/.cache/idf-components \
+    mkdir -p /work/src \
+ && cp -a /src/. /work/src/ \
+ && sed -i '/^CONFIG_IDF_TARGET=/d' /work/src/sdkconfig.defaults \
+ && rm -f /work/src/dependencies.lock \
+ && . "${IDF_PATH}/export.sh" > /dev/null \
+ && cd /work/src \
+ && export IDF_TARGET=linux \
+ && idf.py --preview -B /work/build -DLIB_BSD="$(gcc -print-file-name=libbsd.a)" set-target linux \
+ && idf.py --preview -B /work/build build \
+ && mkdir -p /out \
+ && cp /work/build/cydium.elf /out/cydium-emulator
+
+########################################################################
 FROM scratch AS artifacts
 COPY --from=build /out/ /
+
+FROM scratch AS emulator-artifacts
+COPY --from=emulator /out/ /

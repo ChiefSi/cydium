@@ -3,8 +3,8 @@
 # the serial console. Can be run from any directory; the script must live at
 # the repository root.
 #
-# Usage: build.sh [--target NAME] [--test] [--no-build] [--flash] [--console]
-#                 [--port DEV] [ENGINE BUILD ARGS...]
+# Usage: build.sh [--target NAME] [--test] [--no-build] [--no-build-emulator]
+#                 [--flash] [--console] [--port DEV] [ENGINE BUILD ARGS...]
 #
 #   --target NAME  image to build (default: cydium). "cydium" is the project
 #                  in src/; any other name is the project in src/apps/NAME/,
@@ -13,6 +13,10 @@
 #                  the build is skipped if they fail
 #   --no-build     skip the build and use the existing output in OUT_DIR, e.g.
 #                  to reflash or just open the console
+#   --no-build-emulator
+#                  don't build the emulator. By default building the cydium
+#                  target also builds it (the same image for ESP-IDF's linux
+#                  target) into OUT_DIR/emulator/cydium-emulator
 #   --flash        after building, flash the image with esptool from .venv
 #   --console      after building (and flashing), open the serial console
 #                  with pyserial's miniterm from .venv (Ctrl+] to exit)
@@ -51,6 +55,7 @@ ROOT=$(cd -P "$(dirname "$src")" && pwd)
 # ---------------------------------------------------------------- arguments
 TARGET=cydium
 BUILD=1
+EMULATOR=1
 TEST=0
 FLASH=0
 CONSOLE=0
@@ -67,6 +72,7 @@ while (($#)); do
     --target=*) TARGET=${1#*=}; shift ;;
     --test) TEST=1; shift ;;
     --no-build) BUILD=0; shift ;;
+    --no-build-emulator) EMULATOR=0; shift ;;
     --flash) FLASH=1; shift ;;
     --console) CONSOLE=1; shift ;;
     --port)
@@ -216,6 +222,13 @@ if ((BUILD)); then
   "$ENGINE" build "${args[@]}" ${engine_args[@]+"${engine_args[@]}"} \
     -f "$ROOT/Containerfile" "$ROOT"
 
+  if ((EMULATOR)) && [[ $TARGET == cydium ]]; then
+    echo "Building the emulator (--no-build-emulator to skip)"
+    "$ENGINE" build --target emulator-artifacts --output "type=local,dest=${TMP_DIR}/emulator" \
+      --build-arg "CYD_GIT_DESCRIBE=${git_describe}" ${engine_common[@]+"${engine_common[@]}"} \
+      ${engine_args[@]+"${engine_args[@]}"} -f "$ROOT/Containerfile" "$ROOT"
+  fi
+
   # Only replace the previous output once the build has succeeded.
   rm -rf "${OUT_DIR}"
   mv "${TMP_DIR}" "${OUT_DIR}"
@@ -229,6 +242,11 @@ if ((BUILD)); then
   echo
   echo "Artefacts in ${OUT_DIR}/:"
   ls -l "${OUT_DIR}"
+  if [[ -x ${OUT_DIR}/emulator/cydium-emulator ]]; then
+    echo
+    echo "Emulator: ${OUT_DIR}/emulator/cydium-emulator [--addr ADDR] [--port PORT],"
+    echo "then open http://127.0.0.1:8240/ (or ADDR:PORT)"
+  fi
 elif ((FLASH)) && [[ ! -f $OUT_DIR/flash_args ]]; then
   echo "no build output at $OUT_DIR; build it first (drop --no-build)" >&2
   exit 1
