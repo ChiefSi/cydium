@@ -26,6 +26,15 @@ constexpr uint16_t rgb565_be(uint8_t r, uint8_t g, uint8_t b)
   return static_cast<uint16_t>((c >> 8) | (c << 8));
 }
 
+// Fills [x0, x1) x [y0, y1) with one colour (already byte-swapped), clipped
+// to the screen. Blocks until the last chunk has been sent.
+void fill_rect(int x0, int y0, int x1, int y1, uint16_t color_be);
+
+// Copies a w x h block of pixels (already byte-swapped) to (x, y) WITHOUT
+// clipping, so callers can probe addresses outside 240x320. w * h must fit in
+// one chunk buffer (240 * kChunkRows pixels). Blocks until sent.
+void blit(int x, int y, int w, int h, const uint16_t* pixels_be);
+
 // Fills the whole screen with one colour (already byte-swapped). Blocks until
 // the last chunk has been sent.
 void fill(uint16_t color_be);

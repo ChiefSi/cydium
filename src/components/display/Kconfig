@@ -8,6 +8,13 @@ menu "CYD display"
             Start at 40 MHz. The TFT is on HSPI's IO_MUX pins, so 60-80 MHz
             may work; keep the fastest clock that is stable on your board.
 
+    config CYD_LCD_BGR
+        bool "Panel uses BGR element order"
+        default n
+        help
+            Leave off if red and blue come out right. Turn on if they are
+            swapped (some CYD batches are wired BGR).
+
     config CYD_LCD_INVERT_DEFAULT
         bool "Invert colours by default"
         default n
@@ -15,12 +22,33 @@ menu "CYD display"
             Panels vary between CYD clones. If dark scenes look bright and
             washed out, flip this. It can also be changed at runtime.
 
+    config CYD_LCD_SWAP_XY
+        bool "Swap X and Y"
+        default y
+        help
+            On this CYD the controller's column address runs along the 320 px
+            edge. Swapping gives the 240x320 portrait address space the
+            firmware expects; without it the last 80 columns are never written.
+
     config CYD_LCD_MIRROR_X
         bool "Mirror X"
-        default n
+        default y
+        help
+            With swap and both mirrors on, (0, 0) is top-left in portrait with
+            the USB port at the bottom. Flip if the image is mirrored
+            left-right.
 
     config CYD_LCD_MIRROR_Y
         bool "Mirror Y"
+        default y
+        help
+            Flip if the image is upside down (text reflected vertically).
+
+    config CYD_LCD_PROBE
+        bool "Log controller ID registers at boot"
         default n
+        help
+            Reads the LCD controller's ID registers over MISO before
+            initialising the panel and logs them. Used by the diagnostic image.
 
 endmenu
