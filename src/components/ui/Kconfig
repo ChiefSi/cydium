@@ -1,0 +1,49 @@
+menu "CYD menu"
+
+    config CYD_MENU_ICON_SIZE
+        int "Menu icon size (pixels)"
+        range 16 64
+        default 32
+        help
+            Width and height of the menu icon. The PNG is scaled to fit this
+            square at build time. Resistive touch needs a target of about
+            30 px or more.
+
+    config CYD_MENU_ICON_OFFSET
+        int "Menu icon offset from the screen edges (pixels)"
+        range 0 64
+        default 4
+
+    config CYD_MENU_ICON_PNG
+        string "Menu icon PNG"
+        default "icons/menu.png"
+        help
+            Path to the icon image, relative to src/components/ui (or
+            absolute inside the build container). It must live under src/,
+            the only folder the container build can see. Non-interlaced
+            8-bit grey, RGB, RGBA or palette PNGs are supported; transparency
+            is kept. Regenerate the default with tools/make_menu_icon.py.
+
+    choice CYD_MENU_ICON_CORNER
+        prompt "Default menu icon position"
+        default CYD_MENU_ICON_TOP_LEFT
+        help
+            Used until the icon is moved in Settings > Display (the choice is
+            then saved in NVS).
+
+        config CYD_MENU_ICON_TOP_LEFT
+            bool "Top left"
+        config CYD_MENU_ICON_TOP_RIGHT
+            bool "Top right"
+        config CYD_MENU_ICON_BOTTOM_LEFT
+            bool "Bottom left"
+        config CYD_MENU_ICON_BOTTOM_RIGHT
+            bool "Bottom right"
+    endchoice
+
+    config CYD_MENU_TIMEOUT_S
+        int "Close the menu after this many seconds without a touch (0 = never)"
+        range 0 600
+        default 10
+
+endmenu
