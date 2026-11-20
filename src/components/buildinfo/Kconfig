@@ -1,0 +1,34 @@
+menu "Product name and version"
+
+    config CYD_PRODUCT_NAME
+        string "Product name"
+        default "cydium"
+        help
+            Shown at the top of the menu's About page.
+
+    choice CYD_VERSION_SOURCE
+        prompt "Version"
+        default CYD_VERSION_GENERATED
+        help
+            Shown on the menu's About page.
+
+        config CYD_VERSION_GENERATED
+            bool "Generated: git describe and build time"
+            help
+                "<git describe>[-dirty]-<build time>", with the build time in
+                seconds since the Unix epoch (UTC), e.g.
+                "7973efb-dirty-1795189980". build.sh passes the git
+                part in (the container has no .git); -dirty is added when
+                `git status --porcelain` reports any change, including
+                untracked files. Without build.sh it reads "unknown".
+
+        config CYD_VERSION_CUSTOM
+            bool "Custom string"
+    endchoice
+
+    config CYD_VERSION_STRING
+        string "Custom version"
+        depends on CYD_VERSION_CUSTOM
+        default "custom"
+
+endmenu
